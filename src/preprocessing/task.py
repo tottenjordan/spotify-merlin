@@ -101,16 +101,36 @@ def create_cluster(
 #            Create & Save dataset
 # =============================================
 
-def create_parquet_nvt_dataset(data_dir, frac_size):
-  return nvt.Dataset(f'{data_dir}', engine='parquet', part_mem_fraction=frac_size)
+# def create_parquet_nvt_dataset(data_dir, frac_size):
+#   return nvt.Dataset(f'{data_dir}', engine='parquet', part_mem_fraction=frac_size)
+def create_parquet_nvt_dataset(
+    data_path,
+    frac_size
+):
+  """Create a nvt.Dataset definition for the parquet files."""
+  fs = fsspec.filesystem('gs')
+  file_list = fs.glob(
+      os.path.join(data_path, '*.parquet')
+  )
+
+  if not file_list:
+    raise FileNotFoundError('Parquet file(s) not found')
+
+  file_list = [os.path.join('gs://', i) for i in file_list]
+
+  return nvt.Dataset(
+      file_list,
+      engine='parquet',
+      part_mem_fraction=frac_size
+  )
 
 def save_dataset(
     dataset,
     output_path,
     output_files,
-    shuffle=None,
     categorical_cols,
-    continuous_cols
+    continuous_cols,
+    shuffle=None,
 ):
   """Save dataset to parquet files to path."""
   
@@ -227,6 +247,96 @@ def create_nvt_workflow():
   return workflow
 
 # =============================================
+#            Create Parquet Dataset 
+# =============================================
+
+def create_parquet_dataset_definition(
+    data_paths,
+    recursive,
+    # col_dtypes,
+    frac_size,
+    # sep='\t'
+):
+  """Create nvt.Dataset definition for Parquet files."""
+  fs_spec = fsspec.filesystem('gs')
+  rec_symbol = '**' if recursive else '*'
+
+  valid_paths = []
+  for path in data_paths:
+    try:
+      if fs_spec.isfile(path):
+        valid_paths.append(path)
+      else:
+        path = os.path.join(path, rec_symbol)
+        for i in fs_spec.glob(path):
+          if fs_spec.isfile(i):
+            valid_paths.append(f'gs://{i}')
+    except FileNotFoundError as fnf_expt:
+      print(fnf_expt)
+      print('Incorrect path: {path}.')
+    except OSError as os_err:
+      print(os_err)
+      print('Verify access to the bucket.')
+
+  return nvt.Dataset(
+      path_or_source=valid_paths,
+      engine='parquet',
+      # names=list(col_dtypes.keys()),
+      # sep=sep,
+      # dtypes=col_dtypes,
+      part_mem_fraction=frac_size,
+      # assume_missing=True
+  )
+
+def convert_definition_to_parquet(
+    output_path,
+    dataset,
+    output_files,
+    shuffle=None
+):
+  """Convert Parquet files to parquet and write to GCS."""
+  if shuffle == 'None':
+    shuffle = None
+  else:
+    try:
+      shuffle = getattr(Shuffle, shuffle)
+    except:
+      print('Shuffle method not available. Using default.')
+      shuffle = None
+
+  dataset.to_parquet(
+      output_path,
+      shuffle=shuffle,
+      output_files=output_files
+  )
+
+# =============================================
+#            Create nv-tabular definition
+# =============================================
+def main_convert(args):
+  logging.info('Creating cluster')
+  client = create_cluster(
+    args.n_workers,
+    args.device_limit_frac,
+    args.device_pool_frac,
+    args.memory_limit
+  )
+  logging.info('Creating parquet dataset definition')
+  dataset = create_parquet_dataset_definition(
+    data_paths=args.parq_data_path, 
+    # args.sep,
+    recursive=False, 
+    # get_criteo_col_dtypes(), 
+    frac_size=args.frac_size
+  )
+
+  logging.info('Converting definition to Parquet')
+  convert_definition_to_parquet(
+    args.output_path,
+    dataset,
+    args.output_files
+  )
+# =============================================
 #            Analyse Dataset 
 # =============================================
 def main_analyze(args):
@@ -279,9 +389,9 @@ def main_transform(args):
       transformed_dataset,
       output_path=args.output_path,
       output_files=args.output_files,
-      shuffle=nvt.io.Shuffle.PER_PARTITION,
       categorical_cols=CAT,
-      continuous_cols=CONT
+      continuous_cols=CONT,
+      shuffle=nvt.io.Shuffle.PER_PARTITION,
   )
 
   # =============================================
@@ -291,12 +401,16 @@ def parse_args():
   """Parses command line arguments."""
 
   parser = argparse.ArgumentParser()
+  
   parser.add_argument('--task',
                       type=str,
                       required=False)
   parser.add_argument('--parquet_data_path',
                       type=str,
                       required=False)
+  parser.add_argument('--parq_data_path',
+                      required=False,
+                      nargs='+')
   parser.add_argument('--output_path',
                       type=str,
                       required=False)
@@ -344,8 +458,8 @@ if __name__ == '__main__':
     main_transform(parsed_args)
   elif parsed_args.task == 'analyze':
     main_analyze(parsed_args)
-  # else:
-  #   "Other tasks not configured"
+  elif parsed_args.task == 'convert':
+    main_convert(parsed_args)
 
   end_time = time.time()
   elapsed_time = end_time - start_time

@@ -28,21 +28,53 @@ def preprocessing_parquet(
     valid_paths: list,
     num_output_files_train: int,
     num_output_files_valid: int,
+    # output_dir_param: str,
     shuffle: str
 ):
   # =================================
   # TODO: extract from BQ to parquet 
   # =================================
 
+  """Pipeline to preprocess parquet files in GCS."""
+  # ==================== Convert from parquet to def ========================
+
+  parquet_to_def_train = components.convert_parquet_op(
+      data_paths=train_paths,
+      split='train',
+      num_output_files=num_output_files_train,
+      n_workers=int(config.GPU_LIMIT),
+      shuffle=shuffle
+  )
+  parquet_to_def_train.set_display_name('Convert training split')
+  parquet_to_def_train.set_cpu_limit(config.CPU_LIMIT)
+  parquet_to_def_train.set_memory_limit(config.MEMORY_LIMIT)
+  parquet_to_def_train.set_gpu_limit(config.GPU_LIMIT)
+  parquet_to_def_train.add_node_selector_constraint(GKE_ACCELERATOR_KEY, config.GPU_TYPE)
+
+  # === Convert eval dataset from CSV to Parquet
+  parquet_to_def_valid = components.convert_parquet_op(
+      data_paths=valid_paths,
+      split='valid',
+      num_output_files=num_output_files_valid,
+      n_workers=int(config.GPU_LIMIT),
+      shuffle=shuffle
+  )
+  parquet_to_def_valid.set_display_name('Convert validation split')
+  parquet_to_def_valid.set_cpu_limit(config.CPU_LIMIT)
+  parquet_to_def_valid.set_memory_limit(config.MEMORY_LIMIT)
+  parquet_to_def_valid.set_gpu_limit(config.GPU_LIMIT)
+  parquet_to_def_valid.add_node_selector_constraint(GKE_ACCELERATOR_KEY, config.GPU_TYPE)
+
   # =================================
   # Analyse train dataset 
   # =================================
   # === Analyze train data split
   analyze_dataset = components.analyze_dataset_op(
-      parquet_dataset=config.TRAIN_DIR_PARQUET,
+      # parquet_dataset=config.TRAIN_DIR_PARQUET,
+      parquet_dataset=parquet_to_def_train.outputs['output_dataset'],
       n_workers=int(config.GPU_LIMIT)
   )
-  analyze_dataset.set_display_name('Analyze Dataset')#.set_caching_options(enable_caching=True)
+  analyze_dataset.set_display_name('Analyze Dataset') #.set_caching_options(enable_caching=True)
   analyze_dataset.set_cpu_limit(config.CPU_LIMIT)
   analyze_dataset.set_memory_limit(config.MEMORY_LIMIT)
   analyze_dataset.set_gpu_limit(config.GPU_LIMIT)
@@ -54,7 +86,9 @@ def preprocessing_parquet(
   transform_train = components.transform_dataset_op(
       workflow=analyze_dataset.outputs['workflow'],
       split='train',
-      parquet_dataset=config.TRAIN_DIR_PARQUET,
+      # parquet_dataset=config.TRAIN_DIR_PARQUET,
+      parquet_dataset=parquet_to_def_train.outputs['output_dataset'],
+      # output_dir=f'{output_dir_param}/transformed-train',
       num_output_files=num_output_files_train,
       n_workers=int(config.GPU_LIMIT)
   )
@@ -68,7 +102,8 @@ def preprocessing_parquet(
   transform_valid = components.transform_dataset_op(
       workflow=analyze_dataset.outputs['workflow'],
       split='valid',
-      parquet_dataset=config.VALID_DIR_PARQUET,
+      parquet_dataset=parquet_to_def_valid.outputs['output_dataset'],
+      # output_dir=f'{output_dir_param}/transformed-val',
       num_output_files=num_output_files_valid,
       n_workers=int(config.GPU_LIMIT)
   )

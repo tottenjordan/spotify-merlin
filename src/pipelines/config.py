@@ -38,6 +38,7 @@ GPU_LIMIT = os.getenv("GPU_LIMIT", "4")
 GPU_TYPE = os.getenv("GPU_TYPE", "NVIDIA_TESLA_T4")
 
 # train & valid parquet files
-TRAIN_DIR_PARQUET = os.getenv("TRAIN_DIR_PARQUET", "")
-VALID_DIR_PARQUET = os.getenv("VALID_DIR_PARQUET", "")
+TRAIN_DIR_PARQUET = os.getenv("TRAIN_DIR_PARQUET", "gs://spotify-builtin-2t/train_data_parquet/0000000000**.snappy.parquet")
+VALID_DIR_PARQUET = os.getenv("VALID_DIR_PARQUET", "gs://spotify-builtin-2t/validation_data_parquet/00000000000*.snappy.parquet")
+
 
