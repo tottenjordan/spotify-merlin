@@ -32,6 +32,7 @@ from kfp.v2.dsl import Output
 )
 def convert_parquet_op(
     output_dataset: Output[Dataset],
+    output_path_defined_dir: str,
     data_paths: list,
     split: str,
     num_output_files: int,
@@ -100,17 +101,18 @@ def convert_parquet_op(
     frac_size=frac_size
   )
   
-  logging.info(f'Converting definition to Parquet; {output_dataset.uri}')
+  logging.info(f'Converting Definition to Parquet; {output_dataset.uri}')
+  logging.info(f'Parquet Definition Output Path: ; {output_path_defined_dir}/{split}')
   convert_definition_to_parquet(
-    output_path=output_dataset.uri,
+    output_path=f'{output_path_defined_dir}/{split}', # output_dataset.uri,
     dataset=dataset,
     output_files=num_output_files,
     shuffle=shuffle
   )
 
-  # =============================================
-  #            analyze_dataset_op
-  # =============================================
+# =============================================
+#            analyze_dataset_op
+# =============================================
 @dsl.component(
   base_image=config.NVT_IMAGE_URI,
   install_kfp_package=False
@@ -118,6 +120,8 @@ def convert_parquet_op(
 def analyze_dataset_op(
     parquet_dataset: Input[Dataset],
     workflow: Output[Artifact],
+    output_path_defined_dir: str,
+    output_path_analyzed_dir: str,
     n_workers: int,
     device_limit_frac: Optional[float] = 0.6,
     device_pool_frac: Optional[float] = 0.9,
@@ -153,11 +157,13 @@ def analyze_dataset_op(
     memory_limit=memory_limit
   )
 
-  logging.info('Creating Parquet dataset')
+  # logging.info(f'Creating Parquet dataset:{parquet_dataset.uri}')
+  logging.info(f'Creating Parquet dataset output_path_defined_dir: {output_path_defined_dir}/train')
   dataset = nvt.Dataset(
-      path_or_source=parquet_dataset,
+      path_or_source=f'{output_path_defined_dir}/train', #parquet_dataset.uri,
       engine='parquet',
-      part_mem_fraction=frac_size
+      part_mem_fraction=frac_size,
+      suffix='.parquet'
   )
 
   logging.info('Creating Workflow')
@@ -168,8 +174,11 @@ def analyze_dataset_op(
   nvt_workflow = nvt_workflow.fit(dataset)
 
   logging.info('Saving Workflow')
-  nvt_workflow.save(workflow.path)
+  nvt_workflow.save(f'{output_path_analyzed_dir}') # workflow.path)
     
+# =============================================
+#            transform_dataset_op
+# =============================================
 @dsl.component(
   base_image=config.NVT_IMAGE_URI,
   install_kfp_package=False
@@ -178,7 +187,9 @@ def transform_dataset_op(
     workflow: Input[Artifact],
     parquet_dataset: Input[Dataset],
     transformed_dataset: Output[Dataset],
-    # output_dir: str,
+    output_path_defined_dir: str,
+    output_path_transformed_dir: str,
+    output_path_analyzed_dir: str,
     split: str,
     num_output_files: int,
     n_workers: int,
@@ -227,30 +238,34 @@ def transform_dataset_op(
     memory_limit=memory_limit
   )
 
-  logging.info(f'Creating Parquet dataset:{parquet_dataset.uri}')
+  # logging.info(f'Creating Parquet dataset:gs://{parquet_dataset.uri}')
+  logging.info(f'Creating Parquet dataset:{output_path_defined_dir}/{split}')
   dataset = nvt.Dataset(
-      path_or_source=parquet_dataset.uri,
+      path_or_source=f'{output_path_defined_dir}/{split}', #f'gs://{parquet_dataset.uri}',
       engine='parquet',
-      part_mem_fraction=frac_size
+      part_mem_fraction=frac_size,
+      suffix='.parquet'
   )
 
   logging.info('Loading Workflow')
-  nvt_workflow = nvt.Workflow.load(workflow.path)
+  nvt_workflow = nvt.Workflow.load(f'{output_path_analyzed_dir}') # workflow.path)
 
   logging.info('Transforming Dataset')
   trans_dataset = nvt_workflow.transform(dataset)
 
-  logging.info(f'Saving transformed dataset: {transformed_dataset.uri}')
+  logging.info(f'transformed_dataset.uri: {transformed_dataset.uri}')
+  logging.info(f'Saving transformed dataset: {output_path_transformed_dir}/{split}')
   save_dataset(
     dataset=trans_dataset,
-    output_path=transformed_dataset.uri,
+    output_path=f'{output_path_transformed_dir}/{split}', # transformed_dataset.uri,
     output_files=num_output_files,
     shuffle=shuffle
   )
 
   logging.info('Generating file list for training.')
-  logging.info(f'transformed_dataset.path: {transformed_dataset.path}.')
-  file_list = os.path.join(transformed_dataset.path, '_file_list.txt')
+  logging.info(f'output_path_transformed_dir/split: {output_path_transformed_dir}/{split}')
+  file_list = os.path.join(f'{output_path_transformed_dir}/{split}', f'_file_list.txt')
+  print(f"file_list: {file_list}")
 
   new_lines = []
   with open(file_list, 'r') as fp:
@@ -259,7 +274,7 @@ def transform_dataset_op(
     for line in lines[1:]:
       new_lines.append(line.replace('gs://', '/gcs/'))
 
-  gcs_file_list = os.path.join(transformed_dataset.path, '_gcs_file_list.txt')
+  gcs_file_list = os.path.join(f'{output_path_transformed_dir}/{split}', f'_gcs_file_list.txt')
   with open(gcs_file_list, 'w') as fp:
     fp.writelines(new_lines)
 
