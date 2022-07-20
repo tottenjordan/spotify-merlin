@@ -238,7 +238,7 @@ def transform_dataset_op(
   nvt_workflow = nvt.Workflow.load(workflow.path)
 
   logging.info('Transforming Dataset')
-  trans = nvt_workflow.transform(dataset)
+  trans_dataset = nvt_workflow.transform(dataset)
 
   logging.info(f'Saving transformed dataset: {transformed_dataset.uri}')
   save_dataset(

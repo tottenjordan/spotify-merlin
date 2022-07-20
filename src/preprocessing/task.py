@@ -128,12 +128,14 @@ def save_dataset(
     dataset,
     output_path,
     output_files,
-    categorical_cols,
-    continuous_cols,
+    # categorical_cols,
+    # continuous_cols,
     shuffle=None,
 ):
   """Save dataset to parquet files to path."""
-  
+  categorical_cols=CAT
+  continuous_cols=CONT
+
   dict_dtypes = {}
   for col in categorical_cols:
     dict_dtypes[col] = np.int64
@@ -389,8 +391,8 @@ def main_transform(args):
       transformed_dataset,
       output_path=args.output_path,
       output_files=args.output_files,
-      categorical_cols=CAT,
-      continuous_cols=CONT,
+      # categorical_cols=CAT,
+      # continuous_cols=CONT,
       shuffle=nvt.io.Shuffle.PER_PARTITION,
   )
 
