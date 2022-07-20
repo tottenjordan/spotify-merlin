@@ -1,0 +1,464 @@
+{
+  "pipelineSpec": {
+    "components": {
+      "comp-analyze-dataset-op": {
+        "executorLabel": "exec-analyze-dataset-op",
+        "inputDefinitions": {
+          "parameters": {
+            "device_limit_frac": {
+              "type": "DOUBLE"
+            },
+            "device_pool_frac": {
+              "type": "DOUBLE"
+            },
+            "frac_size": {
+              "type": "DOUBLE"
+            },
+            "memory_limit": {
+              "type": "INT"
+            },
+            "n_workers": {
+              "type": "INT"
+            },
+            "parquet_dataset": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "artifacts": {
+            "workflow": {
+              "artifactType": {
+                "schemaTitle": "system.Artifact",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          }
+        }
+      },
+      "comp-transform-dataset-op": {
+        "executorLabel": "exec-transform-dataset-op",
+        "inputDefinitions": {
+          "artifacts": {
+            "workflow": {
+              "artifactType": {
+                "schemaTitle": "system.Artifact",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          },
+          "parameters": {
+            "device_limit_frac": {
+              "type": "DOUBLE"
+            },
+            "device_pool_frac": {
+              "type": "DOUBLE"
+            },
+            "frac_size": {
+              "type": "DOUBLE"
+            },
+            "memory_limit": {
+              "type": "INT"
+            },
+            "n_workers": {
+              "type": "INT"
+            },
+            "num_output_files": {
+              "type": "INT"
+            },
+            "parquet_dataset": {
+              "type": "STRING"
+            },
+            "split": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "artifacts": {
+            "transformed_dataset": {
+              "artifactType": {
+                "schemaTitle": "system.Dataset",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          }
+        }
+      },
+      "comp-transform-dataset-op-2": {
+        "executorLabel": "exec-transform-dataset-op-2",
+        "inputDefinitions": {
+          "artifacts": {
+            "workflow": {
+              "artifactType": {
+                "schemaTitle": "system.Artifact",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          },
+          "parameters": {
+            "device_limit_frac": {
+              "type": "DOUBLE"
+            },
+            "device_pool_frac": {
+              "type": "DOUBLE"
+            },
+            "frac_size": {
+              "type": "DOUBLE"
+            },
+            "memory_limit": {
+              "type": "INT"
+            },
+            "n_workers": {
+              "type": "INT"
+            },
+            "num_output_files": {
+              "type": "INT"
+            },
+            "parquet_dataset": {
+              "type": "STRING"
+            },
+            "split": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "artifacts": {
+            "transformed_dataset": {
+              "artifactType": {
+                "schemaTitle": "system.Dataset",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          }
+        }
+      }
+    },
+    "deploymentSpec": {
+      "executors": {
+        "exec-analyze-dataset-op": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "analyze_dataset_op"
+            ],
+            "command": [
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef analyze_dataset_op(\n    parquet_dataset: list,\n    workflow: Output[Artifact],\n    n_workers: int,\n    device_limit_frac: Optional[float] = 0.6,\n    device_pool_frac: Optional[float] = 0.9,\n    frac_size: Optional[float] = 0.10,\n    memory_limit: Optional[int] = 100_000_000_000\n):\n  \"\"\"Component to generate statistics from the dataset.\n  Args:\n    parquet_dataset: List of strings\n      Input metadata with references to the train and valid converted\n      datasets in GCS and the split name.\n    workflow: Output[Artifact]\n      Output metadata with the path to the fitted workflow artifacts\n      (statistics).\n    device_limit_frac: Optional[float] = 0.6\n    device_pool_frac: Optional[float] = 0.9\n    frac_size: Optional[float] = 0.10\n  \"\"\"\n  import logging\n  import nvtabular as nvt\n\n  from task import (\n      create_cluster,\n      create_nvt_workflow,\n  )\n\n  logging.basicConfig(level=logging.INFO)\n\n  create_cluster(\n    n_workers=n_workers,\n    device_limit_frac=device_limit_frac,\n    device_pool_frac=device_pool_frac,\n    memory_limit=memory_limit\n  )\n\n  logging.info('Creating Parquet dataset')\n  dataset = nvt.Dataset(\n      path_or_source=parquet_dataset,\n      engine='parquet',\n      part_mem_fraction=frac_size\n  )\n\n  logging.info('Creating Workflow')\n  # Create Workflow\n  nvt_workflow = create_nvt_workflow()\n\n  logging.info('Analyzing dataset')\n  nvt_workflow = nvt_workflow.fit(dataset)\n\n  logging.info('Saving Workflow')\n  nvt_workflow.save(workflow.path)\n\n"
+            ],
+            "image": "gcr.io/hybrid-vertex/nvt-preprocessing",
+            "resources": {
+              "accelerator": {
+                "count": "2",
+                "type": "NVIDIA_TESLA_A100"
+              },
+              "cpuLimit": 96.0,
+              "memoryLimit": 6.8e-07
+            }
+          }
+        },
+        "exec-transform-dataset-op": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "transform_dataset_op"
+            ],
+            "command": [
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef transform_dataset_op(\n    workflow: Input[Artifact],\n    parquet_dataset: list,\n    transformed_dataset: Output[Dataset],\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: str = None,\n    device_limit_frac: float = 0.6,\n    device_pool_frac: float = 0.9,\n    frac_size: float = 0.10,\n    memory_limit: int = 100_000_000_000\n):\n  \"\"\"Component to transform a dataset according to the workflow definitions.\n  Args:\n    workflow: Input[Artifact]\n      Input metadata with the path to the fitted_workflow\n    parquet_dataset: Input[Dataset]\n      Location of the converted dataset in GCS and split name\n    transformed_dataset: Output[Dataset]\n      Split name of the transformed dataset.\n    shuffle: str\n      How to shuffle the converted CSV, default to None. Options:\n        PER_PARTITION\n        PER_WORKER\n        FULL\n    device_limit_frac: float = 0.6\n    device_pool_frac: float = 0.9\n    frac_size: float = 0.10\n  \"\"\"\n  import os\n  import logging\n  import nvtabular as nvt\n  from merlin.schema import Tags\n\n  from task import (\n    create_cluster,\n    save_dataset,\n  )\n\n  logging.basicConfig(level=logging.INFO)\n\n  transformed_dataset.metadata['split'] = split\n\n  logging.info('Creating cluster')\n  create_cluster(\n    n_workers=n_workers,\n    device_limit_frac=device_limit_frac,\n    device_pool_frac=device_pool_frac,\n    memory_limit=memory_limit\n  )\n\n  logging.info(f'Creating Parquet dataset:')\n  dataset = nvt.Dataset(\n      path_or_source=parquet_dataset,\n      engine='parquet',\n      part_mem_fraction=frac_size\n  )\n\n  logging.info('Loading Workflow')\n  nvt_workflow = nvt.Workflow.load(workflow.path)\n\n  logging.info('Transforming Dataset')\n  trans_dataset = nvt_workflow.transform(dataset)\n\n  logging.info(f'Saving transformed dataset: {transformed_dataset.uri}')\n  save_dataset(\n    dataset=trans_dataset,\n    output_path=transformed_dataset.uri,\n    output_files=num_output_files,\n    shuffle=shuffle\n  )\n\n  logging.info('Generating file list for training.')\n  file_list = os.path.join(transformed_dataset.path, '_file_list.txt')\n\n  new_lines = []\n  with open(file_list, 'r') as fp:\n    lines = fp.readlines()\n    new_lines.append(lines[0])\n    for line in lines[1:]:\n      new_lines.append(line.replace('gs://', '/gcs/'))\n\n  gcs_file_list = os.path.join(transformed_dataset.path, '_gcs_file_list.txt')\n  with open(gcs_file_list, 'w') as fp:\n    fp.writelines(new_lines)\n\n  logging.info('Saving cardinalities')\n  cols_schemas = nvt_workflow.output_schema.select_by_tag(Tags.CATEGORICAL)\n  cols_names = cols_schemas.column_names\n\n  cards = []\n  for c in cols_names:\n    col = cols_schemas.get(c)\n    cards.append(col.properties['embedding_sizes']['cardinality'])\n\n  transformed_dataset.metadata['cardinalities'] = cards\n\n"
+            ],
+            "image": "gcr.io/hybrid-vertex/nvt-preprocessing",
+            "resources": {
+              "accelerator": {
+                "count": "2",
+                "type": "NVIDIA_TESLA_A100"
+              },
+              "cpuLimit": 96.0,
+              "memoryLimit": 6.8e-07
+            }
+          }
+        },
+        "exec-transform-dataset-op-2": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "transform_dataset_op"
+            ],
+            "command": [
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef transform_dataset_op(\n    workflow: Input[Artifact],\n    parquet_dataset: list,\n    transformed_dataset: Output[Dataset],\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: str = None,\n    device_limit_frac: float = 0.6,\n    device_pool_frac: float = 0.9,\n    frac_size: float = 0.10,\n    memory_limit: int = 100_000_000_000\n):\n  \"\"\"Component to transform a dataset according to the workflow definitions.\n  Args:\n    workflow: Input[Artifact]\n      Input metadata with the path to the fitted_workflow\n    parquet_dataset: Input[Dataset]\n      Location of the converted dataset in GCS and split name\n    transformed_dataset: Output[Dataset]\n      Split name of the transformed dataset.\n    shuffle: str\n      How to shuffle the converted CSV, default to None. Options:\n        PER_PARTITION\n        PER_WORKER\n        FULL\n    device_limit_frac: float = 0.6\n    device_pool_frac: float = 0.9\n    frac_size: float = 0.10\n  \"\"\"\n  import os\n  import logging\n  import nvtabular as nvt\n  from merlin.schema import Tags\n\n  from task import (\n    create_cluster,\n    save_dataset,\n  )\n\n  logging.basicConfig(level=logging.INFO)\n\n  transformed_dataset.metadata['split'] = split\n\n  logging.info('Creating cluster')\n  create_cluster(\n    n_workers=n_workers,\n    device_limit_frac=device_limit_frac,\n    device_pool_frac=device_pool_frac,\n    memory_limit=memory_limit\n  )\n\n  logging.info(f'Creating Parquet dataset:')\n  dataset = nvt.Dataset(\n      path_or_source=parquet_dataset,\n      engine='parquet',\n      part_mem_fraction=frac_size\n  )\n\n  logging.info('Loading Workflow')\n  nvt_workflow = nvt.Workflow.load(workflow.path)\n\n  logging.info('Transforming Dataset')\n  trans_dataset = nvt_workflow.transform(dataset)\n\n  logging.info(f'Saving transformed dataset: {transformed_dataset.uri}')\n  save_dataset(\n    dataset=trans_dataset,\n    output_path=transformed_dataset.uri,\n    output_files=num_output_files,\n    shuffle=shuffle\n  )\n\n  logging.info('Generating file list for training.')\n  file_list = os.path.join(transformed_dataset.path, '_file_list.txt')\n\n  new_lines = []\n  with open(file_list, 'r') as fp:\n    lines = fp.readlines()\n    new_lines.append(lines[0])\n    for line in lines[1:]:\n      new_lines.append(line.replace('gs://', '/gcs/'))\n\n  gcs_file_list = os.path.join(transformed_dataset.path, '_gcs_file_list.txt')\n  with open(gcs_file_list, 'w') as fp:\n    fp.writelines(new_lines)\n\n  logging.info('Saving cardinalities')\n  cols_schemas = nvt_workflow.output_schema.select_by_tag(Tags.CATEGORICAL)\n  cols_names = cols_schemas.column_names\n\n  cards = []\n  for c in cols_names:\n    col = cols_schemas.get(c)\n    cards.append(col.properties['embedding_sizes']['cardinality'])\n\n  transformed_dataset.metadata['cardinalities'] = cards\n\n"
+            ],
+            "image": "gcr.io/hybrid-vertex/nvt-preprocessing",
+            "resources": {
+              "accelerator": {
+                "count": "2",
+                "type": "NVIDIA_TESLA_A100"
+              },
+              "cpuLimit": 96.0,
+              "memoryLimit": 6.8e-07
+            }
+          }
+        }
+      }
+    },
+    "pipelineInfo": {
+      "name": "nvt-parquet-pipeline"
+    },
+    "root": {
+      "dag": {
+        "tasks": {
+          "analyze-dataset-op": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-analyze-dataset-op"
+            },
+            "inputs": {
+              "parameters": {
+                "device_limit_frac": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.6
+                    }
+                  }
+                },
+                "device_pool_frac": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.9
+                    }
+                  }
+                },
+                "frac_size": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.1
+                    }
+                  }
+                },
+                "memory_limit": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "intValue": "100000000000"
+                    }
+                  }
+                },
+                "n_workers": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "intValue": "2"
+                    }
+                  }
+                },
+                "parquet_dataset": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": ""
+                    }
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "Analyze Dataset"
+            }
+          },
+          "transform-dataset-op": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-transform-dataset-op"
+            },
+            "dependentTasks": [
+              "analyze-dataset-op"
+            ],
+            "inputs": {
+              "artifacts": {
+                "workflow": {
+                  "taskOutputArtifact": {
+                    "outputArtifactKey": "workflow",
+                    "producerTask": "analyze-dataset-op"
+                  }
+                }
+              },
+              "parameters": {
+                "device_limit_frac": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.6
+                    }
+                  }
+                },
+                "device_pool_frac": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.9
+                    }
+                  }
+                },
+                "frac_size": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.1
+                    }
+                  }
+                },
+                "memory_limit": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "intValue": "100000000000"
+                    }
+                  }
+                },
+                "n_workers": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "intValue": "2"
+                    }
+                  }
+                },
+                "num_output_files": {
+                  "componentInputParameter": "num_output_files_train"
+                },
+                "parquet_dataset": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": ""
+                    }
+                  }
+                },
+                "split": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "train"
+                    }
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "Transform train split"
+            }
+          },
+          "transform-dataset-op-2": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-transform-dataset-op-2"
+            },
+            "dependentTasks": [
+              "analyze-dataset-op"
+            ],
+            "inputs": {
+              "artifacts": {
+                "workflow": {
+                  "taskOutputArtifact": {
+                    "outputArtifactKey": "workflow",
+                    "producerTask": "analyze-dataset-op"
+                  }
+                }
+              },
+              "parameters": {
+                "device_limit_frac": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.6
+                    }
+                  }
+                },
+                "device_pool_frac": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.9
+                    }
+                  }
+                },
+                "frac_size": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "doubleValue": 0.1
+                    }
+                  }
+                },
+                "memory_limit": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "intValue": "100000000000"
+                    }
+                  }
+                },
+                "n_workers": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "intValue": "2"
+                    }
+                  }
+                },
+                "num_output_files": {
+                  "componentInputParameter": "num_output_files_valid"
+                },
+                "parquet_dataset": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": ""
+                    }
+                  }
+                },
+                "split": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "valid"
+                    }
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "Transform valid split"
+            }
+          }
+        }
+      },
+      "inputDefinitions": {
+        "parameters": {
+          "num_output_files_train": {
+            "type": "INT"
+          },
+          "num_output_files_valid": {
+            "type": "INT"
+          },
+          "shuffle": {
+            "type": "STRING"
+          },
+          "train_paths": {
+            "type": "STRING"
+          },
+          "valid_paths": {
+            "type": "STRING"
+          }
+        }
+      }
+    },
+    "schemaVersion": "2.0.0",
+    "sdkVersion": "kfp-1.8.13"
+  },
+  "runtimeConfig": {
+    "gcsOutputDirectory": "gs://spotify-merlin-v1/nvt-preprocessing-spotify-v00-subset/nvt-parquet-pipeline"
+  }
+}

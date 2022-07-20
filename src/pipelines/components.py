@@ -28,7 +28,7 @@ from kfp.v2.dsl import Output
   install_kfp_package=False
 )
 def analyze_dataset_op(
-    parquet_dataset: Input[Dataset],
+    parquet_dataset: list,
     workflow: Output[Artifact],
     n_workers: int,
     device_limit_frac: Optional[float] = 0.6,
@@ -38,7 +38,7 @@ def analyze_dataset_op(
 ):
   """Component to generate statistics from the dataset.
   Args:
-    parquet_dataset: Input[Dataset]
+    parquet_dataset: List of strings
       Input metadata with references to the train and valid converted
       datasets in GCS and the split name.
     workflow: Output[Artifact]
@@ -53,7 +53,7 @@ def analyze_dataset_op(
   
   from task import (
       create_cluster,
-      create_criteo_nvt_workflow,
+      create_nvt_workflow,
   )
 
   logging.basicConfig(level=logging.INFO)
@@ -67,20 +67,20 @@ def analyze_dataset_op(
 
   logging.info('Creating Parquet dataset')
   dataset = nvt.Dataset(
-      path_or_source=parquet_dataset.uri,
+      path_or_source=parquet_dataset,
       engine='parquet',
       part_mem_fraction=frac_size
   )
 
   logging.info('Creating Workflow')
   # Create Workflow
-  criteo_workflow = create_criteo_nvt_workflow()
+  nvt_workflow = create_nvt_workflow()
 
   logging.info('Analyzing dataset')
-  criteo_workflow = criteo_workflow.fit(dataset)
+  nvt_workflow = nvt_workflow.fit(dataset)
 
   logging.info('Saving Workflow')
-  criteo_workflow.save(workflow.path)
+  nvt_workflow.save(workflow.path)
     
 @dsl.component(
   base_image=config.NVT_IMAGE_URI,
@@ -88,8 +88,9 @@ def analyze_dataset_op(
 )
 def transform_dataset_op(
     workflow: Input[Artifact],
-    parquet_dataset: Input[Dataset],
+    parquet_dataset: list,
     transformed_dataset: Output[Dataset],
+    split: str,
     num_output_files: int,
     n_workers: int,
     shuffle: str = None,
@@ -127,8 +128,7 @@ def transform_dataset_op(
 
   logging.basicConfig(level=logging.INFO)
 
-  transformed_dataset.metadata['split'] = \
-    parquet_dataset.metadata['split']
+  transformed_dataset.metadata['split'] = split
   
   logging.info('Creating cluster')
   create_cluster(
@@ -138,9 +138,9 @@ def transform_dataset_op(
     memory_limit=memory_limit
   )
 
-  logging.info(f'Creating Parquet dataset: {parquet_dataset.uri}')
+  logging.info(f'Creating Parquet dataset:')
   dataset = nvt.Dataset(
-      path_or_source=parquet_dataset.uri,
+      path_or_source=parquet_dataset,
       engine='parquet',
       part_mem_fraction=frac_size
   )
@@ -149,7 +149,7 @@ def transform_dataset_op(
   nvt_workflow = nvt.Workflow.load(workflow.path)
 
   logging.info('Transforming Dataset')
-  trans_dataset = nvt_workflow.transform(dataset)
+  transformed_dataset = nvt_workflow.transform(dataset)
 
   logging.info(f'Saving transformed dataset: {transformed_dataset.uri}')
   save_dataset(

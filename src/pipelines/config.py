@@ -23,7 +23,7 @@ VERTEX_SA = os.getenv("VERTEX_SA",
 
 VERSION = os.getenv("VERSION", "")
 
-MODEL_DISPLAY_NAME = os.getenv("XXXXX", "")
+MODEL_DISPLAY_NAME = os.getenv("MODEL_DISPLAY_NAME", "")
 
 WORKSPACE = os.getenv("WORKSPACE", "")
 NVT_IMAGE_URI = os.getenv("NVT_IMAGE_URI", "")
@@ -31,9 +31,13 @@ PREPROCESS_PARQUET_PIPELINE_NAME = os.getenv("PREPROCESS_PARQUET_PIPELINE_NAME",
 PREPROCESS_PARQUET_PIPELINE_ROOT = os.getenv("PREPROCESS_PARQUET_PIPELINE_ROOT", "")
 DOCKERNAME = os.getenv("DOCKERNAME", "")
 
-GPU_LIMIT = os.getenv("GPU_LIMIT", "")
-GPU_TYPE = os.getenv("GPU_TYPE", "")
-CPU_LIMIT = os.getenv("CPU_LIMIT", "")
-MEMORY_LIMIT = os.getenv("MEMORY_LIMIT", "")
+INSTANCE_TYPE = os.getenv("INSTANCE_TYPE", "n1-highmem-64")
+CPU_LIMIT = os.getenv("CPU_LIMIT", "64")
+MEMORY_LIMIT = os.getenv("MEMORY_LIMIT", "416")
+GPU_LIMIT = os.getenv("GPU_LIMIT", "4")
+GPU_TYPE = os.getenv("GPU_TYPE", "NVIDIA_TESLA_T4")
 
+# train & valid parquet files
+TRAIN_DIR_PARQUET = os.getenv("TRAIN_DIR_PARQUET", "")
+VALID_DIR_PARQUET = os.getenv("VALID_DIR_PARQUET", "")
 
