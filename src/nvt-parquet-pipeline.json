@@ -27,6 +27,12 @@
             },
             "n_workers": {
               "type": "INT"
+            },
+            "output_path_analyzed_dir": {
+              "type": "STRING"
+            },
+            "output_path_defined_dir": {
+              "type": "STRING"
             }
           }
         },
@@ -45,7 +51,10 @@
         "executorLabel": "exec-convert-parquet-op",
         "inputDefinitions": {
           "parameters": {
-            "data_paths": {
+            "bucket_name": {
+              "type": "STRING"
+            },
+            "data_path_prefix": {
               "type": "STRING"
             },
             "device_limit_frac": {
@@ -65,6 +74,9 @@
             },
             "num_output_files": {
               "type": "INT"
+            },
+            "output_path_defined_dir": {
+              "type": "STRING"
             },
             "recursive": {
               "type": "STRING"
@@ -92,7 +104,10 @@
         "executorLabel": "exec-convert-parquet-op-2",
         "inputDefinitions": {
           "parameters": {
-            "data_paths": {
+            "bucket_name": {
+              "type": "STRING"
+            },
+            "data_path_prefix": {
               "type": "STRING"
             },
             "device_limit_frac": {
@@ -112,6 +127,9 @@
             },
             "num_output_files": {
               "type": "INT"
+            },
+            "output_path_defined_dir": {
+              "type": "STRING"
             },
             "recursive": {
               "type": "STRING"
@@ -171,6 +189,15 @@
             "num_output_files": {
               "type": "INT"
             },
+            "output_path_analyzed_dir": {
+              "type": "STRING"
+            },
+            "output_path_defined_dir": {
+              "type": "STRING"
+            },
+            "output_path_transformed_dir": {
+              "type": "STRING"
+            },
             "split": {
               "type": "STRING"
             }
@@ -223,6 +250,15 @@
             "num_output_files": {
               "type": "INT"
             },
+            "output_path_analyzed_dir": {
+              "type": "STRING"
+            },
+            "output_path_defined_dir": {
+              "type": "STRING"
+            },
+            "output_path_transformed_dir": {
+              "type": "STRING"
+            },
             "split": {
               "type": "STRING"
             }
@@ -254,7 +290,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef analyze_dataset_op(\n    parquet_dataset: Input[Dataset],\n    workflow: Output[Artifact],\n    n_workers: int,\n    device_limit_frac: Optional[float] = 0.6,\n    device_pool_frac: Optional[float] = 0.9,\n    frac_size: Optional[float] = 0.10,\n    memory_limit: Optional[int] = 100_000_000_000\n):\n  \"\"\"Component to generate statistics from the dataset.\n  Args:\n    parquet_dataset: List of strings\n      Input metadata with references to the train and valid converted\n      datasets in GCS and the split name.\n    workflow: Output[Artifact]\n      Output metadata with the path to the fitted workflow artifacts\n      (statistics).\n    device_limit_frac: Optional[float] = 0.6\n    device_pool_frac: Optional[float] = 0.9\n    frac_size: Optional[float] = 0.10\n  \"\"\"\n  import logging\n  import nvtabular as nvt\n\n  from task import (\n      create_cluster,\n      create_nvt_workflow,\n  )\n\n  logging.basicConfig(level=logging.INFO)\n\n  create_cluster(\n    n_workers=n_workers,\n    device_limit_frac=device_limit_frac,\n    device_pool_frac=device_pool_frac,\n    memory_limit=memory_limit\n  )\n\n  logging.info('Creating Parquet dataset')\n  dataset = nvt.Dataset(\n      path_or_source=parquet_dataset,\n      engine='parquet',\n      part_mem_fraction=frac_size\n  )\n\n  logging.info('Creating Workflow')\n  # Create Workflow\n  nvt_workflow = create_nvt_workflow()\n\n  logging.info('Analyzing dataset')\n  nvt_workflow = nvt_workflow.fit(dataset)\n\n  logging.info('Saving Workflow')\n  nvt_workflow.save(workflow.path)\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef analyze_dataset_op(\n    parquet_dataset: Input[Dataset],\n    workflow: Output[Artifact],\n    output_path_defined_dir: str,\n    output_path_analyzed_dir: str,\n    n_workers: int,\n    device_limit_frac: Optional[float] = 0.6,\n    device_pool_frac: Optional[float] = 0.9,\n    frac_size: Optional[float] = 0.10,\n    memory_limit: Optional[int] = 100_000_000_000\n):\n    '''\n    Component to generate statistics from the dataset.\n\n    Args:\n    parquet_dataset: List of strings\n      Input metadata with references to the train and valid converted\n      datasets in GCS and the split name.\n    workflow: Output[Artifact]\n      Output metadata with the path to the fitted workflow artifacts\n      (statistics).\n    device_limit_frac: Optional[float] = 0.6\n    device_pool_frac: Optional[float] = 0.9\n    frac_size: Optional[float] = 0.10\n    '''\n    import logging\n    import nvtabular as nvt\n\n    from task import (\n        create_cluster,\n        create_nvt_workflow,\n    )\n\n    logging.basicConfig(level=logging.INFO)\n\n    create_cluster(\n      n_workers=n_workers,\n      device_limit_frac=device_limit_frac,\n      device_pool_frac=device_pool_frac,\n      memory_limit=memory_limit\n    )\n\n    # logging.info(f'Creating Parquet dataset:{parquet_dataset.uri}')\n    logging.info(f'Creating Parquet dataset output_path_defined_dir: {output_path_defined_dir}/train')\n    dataset = nvt.Dataset(\n        path_or_source=f'{output_path_defined_dir}/train', #parquet_dataset.uri,\n        engine='parquet',\n        part_mem_fraction=frac_size,\n        suffix='.parquet'\n    )\n\n    logging.info('Creating Workflow')\n    # Create Workflow\n    nvt_workflow = create_nvt_workflow()\n\n    logging.info('Analyzing dataset')\n    nvt_workflow = nvt_workflow.fit(dataset)\n\n    logging.info('Saving Workflow')\n    nvt_workflow.save(f'{output_path_analyzed_dir}') # workflow.path)\n\n"
             ],
             "image": "gcr.io/hybrid-vertex/nvt-preprocessing",
             "resources": {
@@ -263,7 +299,7 @@
                 "type": "NVIDIA_TESLA_T4"
               },
               "cpuLimit": 64.0,
-              "memoryLimit": 4.16e-07
+              "memoryLimit": 624.0
             }
           }
         },
@@ -279,7 +315,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef convert_parquet_op(\n    output_dataset: Output[Dataset],\n    data_paths: list,\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: Optional[str] = None,\n    recursive: Optional[bool] = False,\n    device_limit_frac: Optional[float] = 0.6,\n    device_pool_frac: Optional[float] = 0.9,\n    frac_size: Optional[float] = 0.10,\n    memory_limit: Optional[int] = 100_000_000_000\n):\n  r\"\"\"Component to create NVTabular definition.\n  Args:\n    output_dataset: Output[Dataset]\n      Output metadata with references to the converted CSV files in GCS\n      and the split name.The path to the files are in GCS fuse format:\n      /gcs/<bucket name>/path/to/file\n    data_paths: list\n      List of paths to folders or files on GCS.\n      For recursive folder search, set the recursive variable to True:\n        'gs://<bucket_name>/<subfolder1>/<subfolder>/' or\n        'gs://<bucket_name>/<subfolder1>/<subfolder>/flat_file.csv' or\n        a combination of both.\n    split: str\n      Split name of the dataset. Example: train or valid\n    shuffle: str\n      How to shuffle the converted CSV, default to None. Options:\n        PER_PARTITION\n        PER_WORKER\n        FULL\n    recursive: bool\n      Recursivelly search for files in path.\n    device_limit_frac: Optional[float] = 0.6\n    device_pool_frac: Optional[float] = 0.9\n    frac_size: Optional[float] = 0.10\n    memory_limit: Optional[int] = 100_000_000_000\n  \"\"\"\n  import os\n  import logging\n\n  from task import (\n      create_cluster,\n      create_parquet_dataset_definition,\n      convert_definition_to_parquet,\n      # get_criteo_col_dtypes,\n  )\n\n  logging.info('Base path in %s', output_dataset.path)\n\n  # Write metadata\n  output_dataset.metadata['split'] = split\n\n  logging.info('Creating cluster')\n  create_cluster(\n    n_workers=n_workers,\n    device_limit_frac=device_limit_frac,\n    device_pool_frac=device_pool_frac,\n    memory_limit=memory_limit\n  )\n\n  logging.info(f'Creating dataset definition from: {data_paths}')\n  dataset = create_parquet_dataset_definition(\n    data_paths=data_paths,\n    recursive=recursive,\n    # col_dtypes=get_criteo_col_dtypes(),\n    frac_size=frac_size\n  )\n\n  logging.info(f'Converting definition to Parquet; {output_dataset.uri}')\n  convert_definition_to_parquet(\n    output_path=output_dataset.uri,\n    dataset=dataset,\n    output_files=num_output_files,\n    shuffle=shuffle\n  )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef convert_parquet_op(\n    output_dataset: Output[Dataset],\n    bucket_name: str,\n    data_path_prefix: str,\n    output_path_defined_dir: str,\n    # data_paths: list,\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: Optional[str] = None,\n    recursive: Optional[bool] = False,\n    device_limit_frac: Optional[float] = 0.6,\n    device_pool_frac: Optional[float] = 0.9,\n    frac_size: Optional[float] = 0.10,\n    memory_limit: Optional[int] = 100_000_000_000\n):\n    '''\n    Component to create NVTabular definition.\n\n    Args:\n    output_dataset: Output[Dataset]\n      Output metadata with references to the converted CSV files in GCS\n      and the split name.The path to the files are in GCS fuse format:\n      /gcs/<bucket name>/path/to/file\n    bucket: gcs bucket holding train & valid data\n    data_path_prefix: file path to GCS blobl object (e.g., gs://...data/path/prefix.../blob.xxx)\n    data_paths: list\n      List of paths to folders or files on GCS.\n      For recursive folder search, set the recursive variable to True:\n        'gs://<bucket_name>/<subfolder1>/<subfolder>/' or\n        'gs://<bucket_name>/<subfolder1>/<subfolder>/flat_file.csv' or\n        a combination of both.\n    split: str\n      Split name of the dataset. Example: train or valid\n    shuffle: str\n      How to shuffle the converted CSV, default to None. Options:\n        PER_PARTITION\n        PER_WORKER\n        FULL\n    recursive: bool\n      Recursivelly search for files in path.\n    device_limit_frac: Optional[float] = 0.6\n    device_pool_frac: Optional[float] = 0.9\n    frac_size: Optional[float] = 0.10\n    memory_limit: Optional[int] = 100_000_000_000\n    '''\n\n    # =========================================================\n    #            import packages\n    # =========================================================\n    import os\n    import logging\n    from google.cloud import storage\n\n    storage_client = storage.Client()\n\n    from task import (\n        create_cluster,\n        create_parquet_dataset_definition,\n        convert_definition_to_parquet,\n        # get_criteo_col_dtypes,\n    )\n\n    logging.info('Base path in %s', output_dataset.path)\n\n\n    # =========================================================\n    #            Define data paths\n    # =========================================================\n    delimiter = '/'\n    data_paths = []\n\n    data_blobs = storage_client.list_blobs(bucket_name, prefix=data_path_prefix, delimiter=delimiter)\n    for blob in train_blobs:\n        data_paths.append(f'gs://{bucket_name}/{blob.name}')\n        # data_paths.append(f'/gcs/{bucket_name}/{blob.name}')\n\n    logging.info(f'data_paths: {data_paths[:5]}')\n\n    # Write metadata\n    output_dataset.metadata['split'] = split\n\n    logging.info('Creating cluster')\n    create_cluster(\n      n_workers=n_workers,\n      device_limit_frac=device_limit_frac,\n      device_pool_frac=device_pool_frac,\n      memory_limit=memory_limit\n    )\n\n    logging.info(f'Creating dataset definition from: {data_paths}')\n    dataset = create_parquet_dataset_definition(\n      data_paths=data_paths,\n      recursive=recursive,\n      # col_dtypes=get_criteo_col_dtypes(),\n      frac_size=frac_size\n    )\n\n    logging.info(f'Converting Definition to Parquet; {output_dataset.uri}')\n    logging.info(f'Parquet Definition Output Path: ; {output_path_defined_dir}/{split}')\n    convert_definition_to_parquet(\n        output_path=f'{output_path_defined_dir}/{split}', # output_dataset.uri,\n        dataset=dataset,\n        output_files=num_output_files,\n        shuffle=shuffle\n    )\n\n"
             ],
             "image": "gcr.io/hybrid-vertex/nvt-preprocessing",
             "resources": {
@@ -288,7 +324,7 @@
                 "type": "NVIDIA_TESLA_T4"
               },
               "cpuLimit": 64.0,
-              "memoryLimit": 4.16e-07
+              "memoryLimit": 624.0
             }
           }
         },
@@ -304,7 +340,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef convert_parquet_op(\n    output_dataset: Output[Dataset],\n    data_paths: list,\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: Optional[str] = None,\n    recursive: Optional[bool] = False,\n    device_limit_frac: Optional[float] = 0.6,\n    device_pool_frac: Optional[float] = 0.9,\n    frac_size: Optional[float] = 0.10,\n    memory_limit: Optional[int] = 100_000_000_000\n):\n  r\"\"\"Component to create NVTabular definition.\n  Args:\n    output_dataset: Output[Dataset]\n      Output metadata with references to the converted CSV files in GCS\n      and the split name.The path to the files are in GCS fuse format:\n      /gcs/<bucket name>/path/to/file\n    data_paths: list\n      List of paths to folders or files on GCS.\n      For recursive folder search, set the recursive variable to True:\n        'gs://<bucket_name>/<subfolder1>/<subfolder>/' or\n        'gs://<bucket_name>/<subfolder1>/<subfolder>/flat_file.csv' or\n        a combination of both.\n    split: str\n      Split name of the dataset. Example: train or valid\n    shuffle: str\n      How to shuffle the converted CSV, default to None. Options:\n        PER_PARTITION\n        PER_WORKER\n        FULL\n    recursive: bool\n      Recursivelly search for files in path.\n    device_limit_frac: Optional[float] = 0.6\n    device_pool_frac: Optional[float] = 0.9\n    frac_size: Optional[float] = 0.10\n    memory_limit: Optional[int] = 100_000_000_000\n  \"\"\"\n  import os\n  import logging\n\n  from task import (\n      create_cluster,\n      create_parquet_dataset_definition,\n      convert_definition_to_parquet,\n      # get_criteo_col_dtypes,\n  )\n\n  logging.info('Base path in %s', output_dataset.path)\n\n  # Write metadata\n  output_dataset.metadata['split'] = split\n\n  logging.info('Creating cluster')\n  create_cluster(\n    n_workers=n_workers,\n    device_limit_frac=device_limit_frac,\n    device_pool_frac=device_pool_frac,\n    memory_limit=memory_limit\n  )\n\n  logging.info(f'Creating dataset definition from: {data_paths}')\n  dataset = create_parquet_dataset_definition(\n    data_paths=data_paths,\n    recursive=recursive,\n    # col_dtypes=get_criteo_col_dtypes(),\n    frac_size=frac_size\n  )\n\n  logging.info(f'Converting definition to Parquet; {output_dataset.uri}')\n  convert_definition_to_parquet(\n    output_path=output_dataset.uri,\n    dataset=dataset,\n    output_files=num_output_files,\n    shuffle=shuffle\n  )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef convert_parquet_op(\n    output_dataset: Output[Dataset],\n    bucket_name: str,\n    data_path_prefix: str,\n    output_path_defined_dir: str,\n    # data_paths: list,\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: Optional[str] = None,\n    recursive: Optional[bool] = False,\n    device_limit_frac: Optional[float] = 0.6,\n    device_pool_frac: Optional[float] = 0.9,\n    frac_size: Optional[float] = 0.10,\n    memory_limit: Optional[int] = 100_000_000_000\n):\n    '''\n    Component to create NVTabular definition.\n\n    Args:\n    output_dataset: Output[Dataset]\n      Output metadata with references to the converted CSV files in GCS\n      and the split name.The path to the files are in GCS fuse format:\n      /gcs/<bucket name>/path/to/file\n    bucket: gcs bucket holding train & valid data\n    data_path_prefix: file path to GCS blobl object (e.g., gs://...data/path/prefix.../blob.xxx)\n    data_paths: list\n      List of paths to folders or files on GCS.\n      For recursive folder search, set the recursive variable to True:\n        'gs://<bucket_name>/<subfolder1>/<subfolder>/' or\n        'gs://<bucket_name>/<subfolder1>/<subfolder>/flat_file.csv' or\n        a combination of both.\n    split: str\n      Split name of the dataset. Example: train or valid\n    shuffle: str\n      How to shuffle the converted CSV, default to None. Options:\n        PER_PARTITION\n        PER_WORKER\n        FULL\n    recursive: bool\n      Recursivelly search for files in path.\n    device_limit_frac: Optional[float] = 0.6\n    device_pool_frac: Optional[float] = 0.9\n    frac_size: Optional[float] = 0.10\n    memory_limit: Optional[int] = 100_000_000_000\n    '''\n\n    # =========================================================\n    #            import packages\n    # =========================================================\n    import os\n    import logging\n    from google.cloud import storage\n\n    storage_client = storage.Client()\n\n    from task import (\n        create_cluster,\n        create_parquet_dataset_definition,\n        convert_definition_to_parquet,\n        # get_criteo_col_dtypes,\n    )\n\n    logging.info('Base path in %s', output_dataset.path)\n\n\n    # =========================================================\n    #            Define data paths\n    # =========================================================\n    delimiter = '/'\n    data_paths = []\n\n    data_blobs = storage_client.list_blobs(bucket_name, prefix=data_path_prefix, delimiter=delimiter)\n    for blob in train_blobs:\n        data_paths.append(f'gs://{bucket_name}/{blob.name}')\n        # data_paths.append(f'/gcs/{bucket_name}/{blob.name}')\n\n    logging.info(f'data_paths: {data_paths[:5]}')\n\n    # Write metadata\n    output_dataset.metadata['split'] = split\n\n    logging.info('Creating cluster')\n    create_cluster(\n      n_workers=n_workers,\n      device_limit_frac=device_limit_frac,\n      device_pool_frac=device_pool_frac,\n      memory_limit=memory_limit\n    )\n\n    logging.info(f'Creating dataset definition from: {data_paths}')\n    dataset = create_parquet_dataset_definition(\n      data_paths=data_paths,\n      recursive=recursive,\n      # col_dtypes=get_criteo_col_dtypes(),\n      frac_size=frac_size\n    )\n\n    logging.info(f'Converting Definition to Parquet; {output_dataset.uri}')\n    logging.info(f'Parquet Definition Output Path: ; {output_path_defined_dir}/{split}')\n    convert_definition_to_parquet(\n        output_path=f'{output_path_defined_dir}/{split}', # output_dataset.uri,\n        dataset=dataset,\n        output_files=num_output_files,\n        shuffle=shuffle\n    )\n\n"
             ],
             "image": "gcr.io/hybrid-vertex/nvt-preprocessing",
             "resources": {
@@ -313,7 +349,7 @@
                 "type": "NVIDIA_TESLA_T4"
               },
               "cpuLimit": 64.0,
-              "memoryLimit": 4.16e-07
+              "memoryLimit": 624.0
             }
           }
         },
@@ -329,7 +365,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef transform_dataset_op(\n    workflow: Input[Artifact],\n    parquet_dataset: Input[Dataset],\n    transformed_dataset: Output[Dataset],\n    # output_dir: str,\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: str = None,\n    device_limit_frac: float = 0.6,\n    device_pool_frac: float = 0.9,\n    frac_size: float = 0.10,\n    memory_limit: int = 100_000_000_000\n):\n  \"\"\"Component to transform a dataset according to the workflow definitions.\n  Args:\n    workflow: Input[Artifact]\n      Input metadata with the path to the fitted_workflow\n    parquet_dataset: Input[Dataset]\n      Location of the converted dataset in GCS and split name\n    transformed_dataset: Output[Dataset]\n      Split name of the transformed dataset.\n    shuffle: str\n      How to shuffle the converted CSV, default to None. Options:\n        PER_PARTITION\n        PER_WORKER\n        FULL\n    device_limit_frac: float = 0.6\n    device_pool_frac: float = 0.9\n    frac_size: float = 0.10\n  \"\"\"\n  import os\n  import logging\n  import nvtabular as nvt\n  from merlin.schema import Tags\n\n  from task import (\n    create_cluster,\n    save_dataset,\n  )\n\n  logging.basicConfig(level=logging.INFO)\n\n  transformed_dataset.metadata['split'] = split\n\n  logging.info('Creating cluster')\n  create_cluster(\n    n_workers=n_workers,\n    device_limit_frac=device_limit_frac,\n    device_pool_frac=device_pool_frac,\n    memory_limit=memory_limit\n  )\n\n  logging.info(f'Creating Parquet dataset:{parquet_dataset.uri}')\n  dataset = nvt.Dataset(\n      path_or_source=parquet_dataset.uri,\n      engine='parquet',\n      part_mem_fraction=frac_size\n  )\n\n  logging.info('Loading Workflow')\n  nvt_workflow = nvt.Workflow.load(workflow.path)\n\n  logging.info('Transforming Dataset')\n  trans_dataset = nvt_workflow.transform(dataset)\n\n  logging.info(f'Saving transformed dataset: {transformed_dataset.uri}')\n  save_dataset(\n    dataset=trans_dataset,\n    output_path=transformed_dataset.uri,\n    output_files=num_output_files,\n    shuffle=shuffle\n  )\n\n  logging.info('Generating file list for training.')\n  logging.info(f'transformed_dataset.path: {transformed_dataset.path}.')\n  file_list = os.path.join(transformed_dataset.path, '_file_list.txt')\n\n  new_lines = []\n  with open(file_list, 'r') as fp:\n    lines = fp.readlines()\n    new_lines.append(lines[0])\n    for line in lines[1:]:\n      new_lines.append(line.replace('gs://', '/gcs/'))\n\n  gcs_file_list = os.path.join(transformed_dataset.path, '_gcs_file_list.txt')\n  with open(gcs_file_list, 'w') as fp:\n    fp.writelines(new_lines)\n\n  logging.info('Saving cardinalities')\n  cols_schemas = nvt_workflow.output_schema.select_by_tag(Tags.CATEGORICAL)\n  cols_names = cols_schemas.column_names\n\n  cards = []\n  for c in cols_names:\n    col = cols_schemas.get(c)\n    cards.append(col.properties['embedding_sizes']['cardinality'])\n\n  transformed_dataset.metadata['cardinalities'] = cards\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef transform_dataset_op(\n    workflow: Input[Artifact],\n    parquet_dataset: Input[Dataset],\n    transformed_dataset: Output[Dataset],\n    output_path_defined_dir: str,\n    output_path_transformed_dir: str,\n    output_path_analyzed_dir: str,\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: str = None,\n    device_limit_frac: float = 0.6,\n    device_pool_frac: float = 0.9,\n    frac_size: float = 0.10,\n    memory_limit: int = 100_000_000_000\n):\n    \"\"\"Component to transform a dataset according to the workflow definitions.\n    Args:\n        workflow: Input[Artifact]\n        Input metadata with the path to the fitted_workflow\n        parquet_dataset: Input[Dataset]\n              Location of the converted dataset in GCS and split name\n        transformed_dataset: Output[Dataset]\n        Split name of the transformed dataset.\n        shuffle: str\n            How to shuffle the converted CSV, default to None. Options:\n                PER_PARTITION\n                PER_WORKER\n                FULL\n    device_limit_frac: float = 0.6\n    device_pool_frac: float = 0.9\n    frac_size: float = 0.10\n    \"\"\"\n    import os\n    import logging\n    import nvtabular as nvt\n    from merlin.schema import Tags\n\n    from google.cloud import storage\n    from google.cloud.storage.bucket import Bucket\n    from google.cloud.storage.blob import Blob\n\n    from task import (\n        create_cluster,\n        save_dataset,\n    )\n    def _upload_blob_gcs(gcs_uri, source_file_name, destination_blob_name):\n        \"\"\"Uploads a file to GCS bucket\"\"\"\n        client = storage.Client()\n        blob = Blob.from_string(os.path.join(gcs_uri, destination_blob_name))\n        blob.bucket._client = client\n        blob.upload_from_filename(source_file_name)\n\n    def _read_blob_gcs(bucket_name, source_blob_name, destination_filename):\n        \"\"\"Downloads a file from GCS to local directory\"\"\"\n        client = storage.Client()\n        bucket = client.get_bucket(bucket_name)\n        blob = bucket.blob(source_blob_name)\n        blob.download_to_filename(destination_filename)\n\n\n    logging.basicConfig(level=logging.INFO)\n\n    transformed_dataset.metadata['split'] = split\n\n    logging.info('Creating cluster')\n    create_cluster(\n        n_workers=n_workers,\n        device_limit_frac=device_limit_frac,\n        device_pool_frac=device_pool_frac,\n        memory_limit=memory_limit\n  )\n\n   # logging.info(f'Creating Parquet dataset:gs://{parquet_dataset.uri}')\n    logging.info(f'Creating Parquet dataset:{output_path_defined_dir}/{split}')\n    dataset = nvt.Dataset(\n        path_or_source=f'{output_path_defined_dir}/{split}', #f'gs://{parquet_dataset.uri}',\n        engine='parquet',\n        part_mem_fraction=frac_size,\n        suffix='.parquet'\n    )\n\n    logging.info('Loading Workflow')\n    nvt_workflow = nvt.Workflow.load(f'{output_path_analyzed_dir}') # workflow.path)\n\n    logging.info('Transforming Dataset')\n    trans_dataset = nvt_workflow.transform(dataset)\n\n    logging.info(f'transformed_dataset.uri: {transformed_dataset.uri}')\n    logging.info(f'Saving transformed dataset: {output_path_transformed_dir}/{split}')\n    save_dataset(\n        dataset=trans_dataset,\n        output_path=f'{output_path_transformed_dir}/{split}', # transformed_dataset.uri,\n        output_files=num_output_files,\n        shuffle=shuffle\n    )\n\n    # =========================================================\n    #        read and upload files\n    # =========================================================\n    logging.info('Generating file list for training.')\n\n    # get loca directory\n    _local_directory = os.getcwd()\n\n    _bucket_name='spotify-merlin-v1'\n    _prefix='nvt-preprocessing-spotify-v09-subset/nvt-processed/train'\n    _filename='_file_list.txt'\n    _source_blob_name = f'{_prefix}/{_filename}'\n    logging.info(f'_source_blob_name: {_source_blob_name}')\n\n    _local_destination_filename = f'{_local_directory}/local_file_list.txt'\n    logging.info(f'_local_destination_filename: {_local_destination_filename}')\n\n    _read_blob_gcs(\n        bucket_name=_bucket_name,\n        source_blob_name=f'{_source_blob_name}', \n        destination_filename=_local_destination_filename\n    )\n\n    # write new '/gcs/' file\n    new_lines = []\n    with open(_local_destination_filename, 'r') as fp:\n        lines = fp.readlines()\n        new_lines.append(lines[0])\n        for line in lines[1:]:\n            new_lines.append(line.replace('gs://', '/gcs/'))\n\n    _new_local_filename = f'{_local_directory}/_gcs_file_list.txt'\n    logging.info(f'_new_local_filename: {_new_local_filename}')\n\n    with open(_new_local_filename, 'w') as fp:\n        fp.writelines(new_lines)\n\n    _gcs_uri_destination = f'{output_path_transformed_dir}/{split}'\n\n    _upload_blob_gcs(\n        gcs_uri=_gcs_uri_destination, \n        source_file_name=_new_local_filename, \n        destination_blob_name='_gcs_file_list.txt'\n    )\n\n#     logging.info('Generating file list for training.')\n#     logging.info(f'output_path_transformed_dir/split: {output_path_transformed_dir}/{split}')\n#     file_list = os.path.join(f'{output_path_transformed_dir}/{split}', '_file_list.txt')\n#     print(f\"file_list: {file_list}\")\n\n#     new_lines = []\n#     with open(file_list, 'r') as fp:\n#         lines = fp.readlines()\n#         new_lines.append(lines[0])\n#         for line in lines[1:]:\n#             new_lines.append(line.replace('gs://', '/gcs/'))\n\n#     gcs_file_list = os.path.join(f'{output_path_transformed_dir}/{split}', f'_gcs_file_list.txt')\n#     with open(gcs_file_list, 'w') as fp:\n#         fp.writelines(new_lines)\n\n    # =========================================================\n    #        Saving cardinalities\n    # =========================================================\n    logging.info('Saving cardinalities')\n\n    cols_schemas = nvt_workflow.output_schema.select_by_tag(Tags.CATEGORICAL)\n    cols_names = cols_schemas.column_names\n\n    cards = []\n    for c in cols_names:\n        col = cols_schemas.get(c)\n        cards.append(col.properties['embedding_sizes']['cardinality'])\n\n    transformed_dataset.metadata['cardinalities'] = cards\n\n"
             ],
             "image": "gcr.io/hybrid-vertex/nvt-preprocessing",
             "resources": {
@@ -338,7 +374,7 @@
                 "type": "NVIDIA_TESLA_T4"
               },
               "cpuLimit": 64.0,
-              "memoryLimit": 4.16e-07
+              "memoryLimit": 624.0
             }
           }
         },
@@ -354,7 +390,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef transform_dataset_op(\n    workflow: Input[Artifact],\n    parquet_dataset: Input[Dataset],\n    transformed_dataset: Output[Dataset],\n    # output_dir: str,\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: str = None,\n    device_limit_frac: float = 0.6,\n    device_pool_frac: float = 0.9,\n    frac_size: float = 0.10,\n    memory_limit: int = 100_000_000_000\n):\n  \"\"\"Component to transform a dataset according to the workflow definitions.\n  Args:\n    workflow: Input[Artifact]\n      Input metadata with the path to the fitted_workflow\n    parquet_dataset: Input[Dataset]\n      Location of the converted dataset in GCS and split name\n    transformed_dataset: Output[Dataset]\n      Split name of the transformed dataset.\n    shuffle: str\n      How to shuffle the converted CSV, default to None. Options:\n        PER_PARTITION\n        PER_WORKER\n        FULL\n    device_limit_frac: float = 0.6\n    device_pool_frac: float = 0.9\n    frac_size: float = 0.10\n  \"\"\"\n  import os\n  import logging\n  import nvtabular as nvt\n  from merlin.schema import Tags\n\n  from task import (\n    create_cluster,\n    save_dataset,\n  )\n\n  logging.basicConfig(level=logging.INFO)\n\n  transformed_dataset.metadata['split'] = split\n\n  logging.info('Creating cluster')\n  create_cluster(\n    n_workers=n_workers,\n    device_limit_frac=device_limit_frac,\n    device_pool_frac=device_pool_frac,\n    memory_limit=memory_limit\n  )\n\n  logging.info(f'Creating Parquet dataset:{parquet_dataset.uri}')\n  dataset = nvt.Dataset(\n      path_or_source=parquet_dataset.uri,\n      engine='parquet',\n      part_mem_fraction=frac_size\n  )\n\n  logging.info('Loading Workflow')\n  nvt_workflow = nvt.Workflow.load(workflow.path)\n\n  logging.info('Transforming Dataset')\n  trans_dataset = nvt_workflow.transform(dataset)\n\n  logging.info(f'Saving transformed dataset: {transformed_dataset.uri}')\n  save_dataset(\n    dataset=trans_dataset,\n    output_path=transformed_dataset.uri,\n    output_files=num_output_files,\n    shuffle=shuffle\n  )\n\n  logging.info('Generating file list for training.')\n  logging.info(f'transformed_dataset.path: {transformed_dataset.path}.')\n  file_list = os.path.join(transformed_dataset.path, '_file_list.txt')\n\n  new_lines = []\n  with open(file_list, 'r') as fp:\n    lines = fp.readlines()\n    new_lines.append(lines[0])\n    for line in lines[1:]:\n      new_lines.append(line.replace('gs://', '/gcs/'))\n\n  gcs_file_list = os.path.join(transformed_dataset.path, '_gcs_file_list.txt')\n  with open(gcs_file_list, 'w') as fp:\n    fp.writelines(new_lines)\n\n  logging.info('Saving cardinalities')\n  cols_schemas = nvt_workflow.output_schema.select_by_tag(Tags.CATEGORICAL)\n  cols_names = cols_schemas.column_names\n\n  cards = []\n  for c in cols_names:\n    col = cols_schemas.get(c)\n    cards.append(col.properties['embedding_sizes']['cardinality'])\n\n  transformed_dataset.metadata['cardinalities'] = cards\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef transform_dataset_op(\n    workflow: Input[Artifact],\n    parquet_dataset: Input[Dataset],\n    transformed_dataset: Output[Dataset],\n    output_path_defined_dir: str,\n    output_path_transformed_dir: str,\n    output_path_analyzed_dir: str,\n    split: str,\n    num_output_files: int,\n    n_workers: int,\n    shuffle: str = None,\n    device_limit_frac: float = 0.6,\n    device_pool_frac: float = 0.9,\n    frac_size: float = 0.10,\n    memory_limit: int = 100_000_000_000\n):\n    \"\"\"Component to transform a dataset according to the workflow definitions.\n    Args:\n        workflow: Input[Artifact]\n        Input metadata with the path to the fitted_workflow\n        parquet_dataset: Input[Dataset]\n              Location of the converted dataset in GCS and split name\n        transformed_dataset: Output[Dataset]\n        Split name of the transformed dataset.\n        shuffle: str\n            How to shuffle the converted CSV, default to None. Options:\n                PER_PARTITION\n                PER_WORKER\n                FULL\n    device_limit_frac: float = 0.6\n    device_pool_frac: float = 0.9\n    frac_size: float = 0.10\n    \"\"\"\n    import os\n    import logging\n    import nvtabular as nvt\n    from merlin.schema import Tags\n\n    from google.cloud import storage\n    from google.cloud.storage.bucket import Bucket\n    from google.cloud.storage.blob import Blob\n\n    from task import (\n        create_cluster,\n        save_dataset,\n    )\n    def _upload_blob_gcs(gcs_uri, source_file_name, destination_blob_name):\n        \"\"\"Uploads a file to GCS bucket\"\"\"\n        client = storage.Client()\n        blob = Blob.from_string(os.path.join(gcs_uri, destination_blob_name))\n        blob.bucket._client = client\n        blob.upload_from_filename(source_file_name)\n\n    def _read_blob_gcs(bucket_name, source_blob_name, destination_filename):\n        \"\"\"Downloads a file from GCS to local directory\"\"\"\n        client = storage.Client()\n        bucket = client.get_bucket(bucket_name)\n        blob = bucket.blob(source_blob_name)\n        blob.download_to_filename(destination_filename)\n\n\n    logging.basicConfig(level=logging.INFO)\n\n    transformed_dataset.metadata['split'] = split\n\n    logging.info('Creating cluster')\n    create_cluster(\n        n_workers=n_workers,\n        device_limit_frac=device_limit_frac,\n        device_pool_frac=device_pool_frac,\n        memory_limit=memory_limit\n  )\n\n   # logging.info(f'Creating Parquet dataset:gs://{parquet_dataset.uri}')\n    logging.info(f'Creating Parquet dataset:{output_path_defined_dir}/{split}')\n    dataset = nvt.Dataset(\n        path_or_source=f'{output_path_defined_dir}/{split}', #f'gs://{parquet_dataset.uri}',\n        engine='parquet',\n        part_mem_fraction=frac_size,\n        suffix='.parquet'\n    )\n\n    logging.info('Loading Workflow')\n    nvt_workflow = nvt.Workflow.load(f'{output_path_analyzed_dir}') # workflow.path)\n\n    logging.info('Transforming Dataset')\n    trans_dataset = nvt_workflow.transform(dataset)\n\n    logging.info(f'transformed_dataset.uri: {transformed_dataset.uri}')\n    logging.info(f'Saving transformed dataset: {output_path_transformed_dir}/{split}')\n    save_dataset(\n        dataset=trans_dataset,\n        output_path=f'{output_path_transformed_dir}/{split}', # transformed_dataset.uri,\n        output_files=num_output_files,\n        shuffle=shuffle\n    )\n\n    # =========================================================\n    #        read and upload files\n    # =========================================================\n    logging.info('Generating file list for training.')\n\n    # get loca directory\n    _local_directory = os.getcwd()\n\n    _bucket_name='spotify-merlin-v1'\n    _prefix='nvt-preprocessing-spotify-v09-subset/nvt-processed/train'\n    _filename='_file_list.txt'\n    _source_blob_name = f'{_prefix}/{_filename}'\n    logging.info(f'_source_blob_name: {_source_blob_name}')\n\n    _local_destination_filename = f'{_local_directory}/local_file_list.txt'\n    logging.info(f'_local_destination_filename: {_local_destination_filename}')\n\n    _read_blob_gcs(\n        bucket_name=_bucket_name,\n        source_blob_name=f'{_source_blob_name}', \n        destination_filename=_local_destination_filename\n    )\n\n    # write new '/gcs/' file\n    new_lines = []\n    with open(_local_destination_filename, 'r') as fp:\n        lines = fp.readlines()\n        new_lines.append(lines[0])\n        for line in lines[1:]:\n            new_lines.append(line.replace('gs://', '/gcs/'))\n\n    _new_local_filename = f'{_local_directory}/_gcs_file_list.txt'\n    logging.info(f'_new_local_filename: {_new_local_filename}')\n\n    with open(_new_local_filename, 'w') as fp:\n        fp.writelines(new_lines)\n\n    _gcs_uri_destination = f'{output_path_transformed_dir}/{split}'\n\n    _upload_blob_gcs(\n        gcs_uri=_gcs_uri_destination, \n        source_file_name=_new_local_filename, \n        destination_blob_name='_gcs_file_list.txt'\n    )\n\n#     logging.info('Generating file list for training.')\n#     logging.info(f'output_path_transformed_dir/split: {output_path_transformed_dir}/{split}')\n#     file_list = os.path.join(f'{output_path_transformed_dir}/{split}', '_file_list.txt')\n#     print(f\"file_list: {file_list}\")\n\n#     new_lines = []\n#     with open(file_list, 'r') as fp:\n#         lines = fp.readlines()\n#         new_lines.append(lines[0])\n#         for line in lines[1:]:\n#             new_lines.append(line.replace('gs://', '/gcs/'))\n\n#     gcs_file_list = os.path.join(f'{output_path_transformed_dir}/{split}', f'_gcs_file_list.txt')\n#     with open(gcs_file_list, 'w') as fp:\n#         fp.writelines(new_lines)\n\n    # =========================================================\n    #        Saving cardinalities\n    # =========================================================\n    logging.info('Saving cardinalities')\n\n    cols_schemas = nvt_workflow.output_schema.select_by_tag(Tags.CATEGORICAL)\n    cols_names = cols_schemas.column_names\n\n    cards = []\n    for c in cols_names:\n        col = cols_schemas.get(c)\n        cards.append(col.properties['embedding_sizes']['cardinality'])\n\n    transformed_dataset.metadata['cardinalities'] = cards\n\n"
             ],
             "image": "gcr.io/hybrid-vertex/nvt-preprocessing",
             "resources": {
@@ -363,7 +399,7 @@
                 "type": "NVIDIA_TESLA_T4"
               },
               "cpuLimit": 64.0,
-              "memoryLimit": 4.16e-07
+              "memoryLimit": 624.0
             }
           }
         }
@@ -429,6 +465,12 @@
                       "intValue": "4"
                     }
                   }
+                },
+                "output_path_analyzed_dir": {
+                  "componentInputParameter": "output_path_analyzed_dir"
+                },
+                "output_path_defined_dir": {
+                  "componentInputParameter": "output_path_defined_dir"
                 }
               }
             },
@@ -445,8 +487,15 @@
             },
             "inputs": {
               "parameters": {
-                "data_paths": {
-                  "componentInputParameter": "train_paths"
+                "bucket_name": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "spotify-merlin-v1"
+                    }
+                  }
+                },
+                "data_path_prefix": {
+                  "componentInputParameter": "train_prefix"
                 },
                 "device_limit_frac": {
                   "runtimeValue": {
@@ -486,6 +535,9 @@
                 "num_output_files": {
                   "componentInputParameter": "num_output_files_train"
                 },
+                "output_path_defined_dir": {
+                  "componentInputParameter": "output_path_defined_dir"
+                },
                 "recursive": {
                   "runtimeValue": {
                     "constantValue": {
@@ -518,8 +570,15 @@
             },
             "inputs": {
               "parameters": {
-                "data_paths": {
-                  "componentInputParameter": "valid_paths"
+                "bucket_name": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "spotify-merlin-v1"
+                    }
+                  }
+                },
+                "data_path_prefix": {
+                  "componentInputParameter": "valid_prefix"
                 },
                 "device_limit_frac": {
                   "runtimeValue": {
@@ -558,6 +617,9 @@
                 },
                 "num_output_files": {
                   "componentInputParameter": "num_output_files_valid"
+                },
+                "output_path_defined_dir": {
+                  "componentInputParameter": "output_path_defined_dir"
                 },
                 "recursive": {
                   "runtimeValue": {
@@ -647,6 +709,22 @@
                 "num_output_files": {
                   "componentInputParameter": "num_output_files_train"
                 },
+                "output_path_analyzed_dir": {
+                  "componentInputParameter": "output_path_analyzed_dir"
+                },
+                "output_path_defined_dir": {
+                  "componentInputParameter": "output_path_defined_dir"
+                },
+                "output_path_transformed_dir": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "{{$.inputs.parameters['pipelineparam--output_path_transformed_dir']}}"
+                    }
+                  }
+                },
+                "pipelineparam--output_path_transformed_dir": {
+                  "componentInputParameter": "output_path_transformed_dir"
+                },
                 "split": {
                   "runtimeValue": {
                     "constantValue": {
@@ -725,6 +803,22 @@
                 "num_output_files": {
                   "componentInputParameter": "num_output_files_valid"
                 },
+                "output_path_analyzed_dir": {
+                  "componentInputParameter": "output_path_analyzed_dir"
+                },
+                "output_path_defined_dir": {
+                  "componentInputParameter": "output_path_defined_dir"
+                },
+                "output_path_transformed_dir": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "{{$.inputs.parameters['pipelineparam--output_path_transformed_dir']}}"
+                    }
+                  }
+                },
+                "pipelineparam--output_path_transformed_dir": {
+                  "componentInputParameter": "output_path_transformed_dir"
+                },
                 "split": {
                   "runtimeValue": {
                     "constantValue": {
@@ -748,13 +842,22 @@
           "num_output_files_valid": {
             "type": "INT"
           },
+          "output_path_analyzed_dir": {
+            "type": "STRING"
+          },
+          "output_path_defined_dir": {
+            "type": "STRING"
+          },
+          "output_path_transformed_dir": {
+            "type": "STRING"
+          },
           "shuffle": {
             "type": "STRING"
           },
-          "train_paths": {
+          "train_prefix": {
             "type": "STRING"
           },
-          "valid_paths": {
+          "valid_prefix": {
             "type": "STRING"
           }
         }
@@ -764,6 +867,6 @@
     "sdkVersion": "kfp-1.8.13"
   },
   "runtimeConfig": {
-    "gcsOutputDirectory": "gs://spotify-merlin-v1/nvt-preprocessing-spotify-v00-subset/nvt-parquet-pipeline"
+    "gcsOutputDirectory": "gs://spotify-merlin-v1/nvt-preprocessing-spotify-v16-full/nvt-parquet-pipeline"
   }
 }

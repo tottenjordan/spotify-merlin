@@ -18,6 +18,7 @@ import os
 PROJECT_ID = os.getenv("PROJECT_ID", "")
 REGION = os.getenv("REGION", "us-central1")
 BUCKET = os.getenv("BUCKET", "")
+BUCKET_NAME = os.getenv("BUCKET_NAME", "")
 VERTEX_SA = os.getenv("VERTEX_SA",
                       f"vertex-sa@{PROJECT_ID}.iam.gserviceaccount.com")
 
@@ -33,7 +34,7 @@ DOCKERNAME = os.getenv("DOCKERNAME", "")
 
 INSTANCE_TYPE = os.getenv("INSTANCE_TYPE", "n1-highmem-64")
 CPU_LIMIT = os.getenv("CPU_LIMIT", "64")
-MEMORY_LIMIT = os.getenv("MEMORY_LIMIT", "416")
+MEMORY_LIMIT = os.getenv("MEMORY_LIMIT", "624G")
 GPU_LIMIT = os.getenv("GPU_LIMIT", "4")
 GPU_TYPE = os.getenv("GPU_TYPE", "NVIDIA_TESLA_T4")
 
