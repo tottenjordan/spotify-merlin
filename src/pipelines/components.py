@@ -34,9 +34,9 @@ from kfp.v2.dsl import Output
 def convert_parquet_op(
     output_dataset: Output[Dataset],
     bucket_name: str,
-    # data_path_prefix: str,
+    data_prefix: str,
     output_path_defined_dir: str,
-    data_dir_pattern: str,
+    # data_dir_pattern: str,
     # data_paths: list,
     split: str,
     num_output_files: int,
@@ -101,9 +101,9 @@ def convert_parquet_op(
     # =========================================================
     #            Define data paths
     # =========================================================
-    # logging.info(f'bucket_name: {bucket_name}')
+    logging.info(f'bucket_name: {bucket_name}')
     # logging.info(f'data_path_prefix: {data_path_prefix}')
-    logging.info(f'data_dir_pattern: {data_dir_pattern}')
+    # logging.info(f'data_dir_pattern: {data_prefix}')
 
     
 #     delimiter = '/'
@@ -128,10 +128,12 @@ def convert_parquet_op(
       memory_limit=memory_limit
     )
   
-    logging.info(f'Creating dataset definition from: {data_dir_pattern}')
+    # logging.info(f'Creating dataset definition from: {data_path_prefix}')
     dataset = create_parquet_dataset_definition(
-      data_paths=f'{data_dir_pattern}', # data_paths,
+      # data_paths=f'{data_dir_pattern}', # data_paths,
       recursive=recursive,
+      bucket_name=bucket_name,
+      data_prefix=data_prefix,
       # col_dtypes=get_criteo_col_dtypes(),
       frac_size=frac_size
     )

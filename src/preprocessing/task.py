@@ -81,20 +81,20 @@ def create_cluster(
     device_pool_frac,
     memory_limit
 ):
-  """Create a Dask cluster to apply the transformations steps to the Dataset."""
-  device_size = device_mem_size()
-  device_limit = int(device_limit_frac * device_size)
-  device_pool_size = int(device_pool_frac * device_size)
-  rmm_pool_size = (device_pool_size // 256) * 256
+    """Create a Dask cluster to apply the transformations steps to the Dataset."""
+    device_size = device_mem_size()
+    device_limit = int(device_limit_frac * device_size)
+    device_pool_size = int(device_pool_frac * device_size)
+    rmm_pool_size = (device_pool_size // 256) * 256
 
-  cluster = LocalCUDACluster(
-      n_workers=n_workers,
-      device_memory_limit=device_limit,
-      rmm_pool_size=rmm_pool_size,
-      memory_limit=memory_limit
-  )
+    cluster = LocalCUDACluster(
+        n_workers=n_workers,
+        device_memory_limit=device_limit,
+        rmm_pool_size=rmm_pool_size,
+        memory_limit=memory_limit
+    )
 
-  return Client(cluster)
+    return Client(cluster)
 
 
 # =============================================
@@ -107,21 +107,21 @@ def create_parquet_nvt_dataset(
     data_path,
     frac_size
 ):
-  """Create a nvt.Dataset definition for the parquet files."""
-  fs = fsspec.filesystem('gs')
-  file_list = fs.glob(
-      os.path.join(data_path, '*.parquet')
-  )
+    """Create a nvt.Dataset definition for the parquet files."""
+    fs = fsspec.filesystem('gs')
+    file_list = fs.glob(
+        os.path.join(data_path, '*.parquet')
+    )
 
-  if not file_list:
-    raise FileNotFoundError('Parquet file(s) not found')
+    if not file_list:
+        raise FileNotFoundError('Parquet file(s) not found')
 
-  file_list = [os.path.join('gs://', i) for i in file_list]
+    file_list = [os.path.join('gs://', i) for i in file_list]
 
-  return nvt.Dataset(
-      file_list,
-      engine='parquet',
-      part_mem_fraction=frac_size
+    return nvt.Dataset(
+        file_list,
+        engine='parquet',
+        part_mem_fraction=frac_size
   )
 
 def save_dataset(
@@ -132,161 +132,184 @@ def save_dataset(
     # continuous_cols,
     shuffle=None,
 ):
-  """Save dataset to parquet files to path."""
-  categorical_cols=CAT
-  continuous_cols=CONT
+    """Save dataset to parquet files to path."""
+    categorical_cols=CAT
+    continuous_cols=CONT
 
-  dict_dtypes = {}
-  for col in categorical_cols:
-    dict_dtypes[col] = np.int64
+    dict_dtypes = {}
+    for col in categorical_cols:
+        dict_dtypes[col] = np.int64
 
-  for col in continuous_cols:
-    dict_dtypes[col] = np.float32
+    for col in continuous_cols:
+        dict_dtypes[col] = np.float32
 
-  dataset.to_parquet(
-      output_path=output_path,
-      shuffle=shuffle,
-      output_files=output_files,
-      dtypes=dict_dtypes,
-      cats=categorical_cols,
-      conts=continuous_cols,
-  )
+    dataset.to_parquet(
+        output_path=output_path,
+        shuffle=shuffle,
+        output_files=output_files,
+        dtypes=dict_dtypes,
+        cats=categorical_cols,
+        conts=continuous_cols,
+    )
 # =============================================
 
 # =============================================
 #            Workflow
 # =============================================
 def create_nvt_workflow():
-  '''
-  Create a nvt.Workflow definition with transformation all the steps
-  '''
-  MAX_PADDING = 375
-  item_id = ["track_uri_can"] >> Categorify(dtype="int32") >> ops.TagAsItemID() >> ops.AddMetadata(tags=["user_item"])
+    '''
+    Create a nvt.Workflow definition with transformation all the steps
+    '''
+    MAX_PADDING = 375
+    item_id = ["track_uri_can"] >> Categorify(dtype="int32") >> ops.TagAsItemID() >> ops.AddMetadata(tags=["user_item"])
 #   playlist_id = ["pid_pos_id"] >> Categorify(dtype="int32") >> TagAsUserID() 
   
-  item_features_cat = [
-    'artist_name_can',
-    'track_name_can',
-    'artist_genres_can',
-  ]
+    item_features_cat = [
+        'artist_name_can',
+        'track_name_can',
+        'artist_genres_can',
+    ]
 
-  item_features_cont = [
-    'duration_ms_can',
-    'track_pop_can',
-    'artist_pop_can',
-    'artist_followers_can',
-  ]
+    item_features_cont = [
+        'duration_ms_can',
+        'track_pop_can',
+        'artist_pop_can',
+        'artist_followers_can',
+    ]
 
-  playlist_features_cat = [
-    'artist_name_seed_track',
-    'artist_uri_seed_track',
-    'track_name_seed_track',
-    'track_uri_seed_track',
-    'album_name_seed_track',
-    'album_uri_seed_track',
-    'artist_genres_seed_track',
-    'description_pl',
-    'name',
-    'collaborative',
-  ]
+    playlist_features_cat = [
+        'artist_name_seed_track',
+        'artist_uri_seed_track',
+        'track_name_seed_track',
+        'track_uri_seed_track',
+        'album_name_seed_track',
+        'album_uri_seed_track',
+        'artist_genres_seed_track',
+        'description_pl',
+        'name',
+        'collaborative',
+    ]
 
-  playlist_features_cont = [
-    'duration_seed_track',
-    'track_pop_seed_track',
-    'artist_pop_seed_track',
-    'artist_followers_seed_track',
-    'duration_ms_seed_pl',
-    'n_songs_pl',
-    'num_artists_pl',
-    'num_albums_pl',
-  ]
+    playlist_features_cont = [
+        'duration_seed_track',
+        'track_pop_seed_track',
+        'artist_pop_seed_track',
+        'artist_followers_seed_track',
+        'duration_ms_seed_pl',
+        'n_songs_pl',
+        'num_artists_pl',
+        'num_albums_pl',
+    ]
 
   # subset of features to be tagged
-  seq_feats_cont = [
-    'duration_ms_songs_pl',
-    'artist_pop_pl',
-    'artists_followers_pl',
-    'track_pop_pl',
-  ]
-
-  seq_feats_cat = [
-    'artist_name_pl',
+    seq_feats_cont = [
+        'duration_ms_songs_pl',
+        'artist_pop_pl',
+        'artists_followers_pl',
+        'track_pop_pl',
+    ]
+    
+    seq_feats_cat = [
+        'artist_name_pl',
     # 'track_uri_pl',
-    'track_name_pl',
-    'album_name_pl',
-    'artist_genres_pl',
+        'track_name_pl',
+        'album_name_pl',
+        'artist_genres_pl',
     # 'pid_pos_id', 
-    # 'pos_pl'
-  ]
-  
-  CAT = playlist_features_cat + item_features_cat
-  CONT = item_features_cont + playlist_features_cont
-  
-  item_feature_cat_node = item_features_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> TagAsItemFeatures()
+    # 'pos_pl,
+    ]
+    
+    
+    CAT = playlist_features_cat + item_features_cat
+    CONT = item_features_cont + playlist_features_cont
 
-  item_feature_cont_node =  item_features_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsItemFeatures()
+    item_feature_cat_node = item_features_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> TagAsItemFeatures()
 
-  playlist_feature_cat_node = playlist_features_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> TagAsUserFeatures() 
+    item_feature_cont_node =  item_features_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsItemFeatures()
 
-  playlist_feature_cont_node = playlist_features_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsUserFeatures()
+    playlist_feature_cat_node = playlist_features_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> TagAsUserFeatures() 
 
-  playlist_feature_cat_seq_node = seq_feats_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> ListSlice(MAX_PADDING, pad=True, pad_value=0) >> TagAsUserFeatures() >> nvt.ops.AddTags(Tags.SEQUENCE) 
+    playlist_feature_cont_node = playlist_features_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsUserFeatures()
 
-  playlist_feature_cont_seq_node = seq_feats_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsUserFeatures() >> nvt.ops.AddTags(Tags.SEQUENCE)
+    playlist_feature_cat_seq_node = seq_feats_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> ListSlice(MAX_PADDING, pad=True, pad_value=0) >> TagAsUserFeatures() >> nvt.ops.AddTags(Tags.SEQUENCE) 
+
+    playlist_feature_cont_seq_node = seq_feats_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsUserFeatures() >> nvt.ops.AddTags(Tags.SEQUENCE)
   
   # define a workflow
-  output = item_id \
-  + item_feature_cat_node \
-  + item_feature_cont_node \
-  + playlist_feature_cat_node \
-  + playlist_feature_cont_node \
-  + playlist_feature_cont_seq_node \
-  + playlist_feature_cat_seq_node \
+    output = item_id \
+    + item_feature_cat_node \
+    + item_feature_cont_node \
+    + playlist_feature_cat_node \
+    + playlist_feature_cont_node \
+    + playlist_feature_cont_seq_node \
+    + playlist_feature_cat_seq_node \
   # playlist_id \
 
-  workflow = nvt.Workflow(output)
+    workflow = nvt.Workflow(output)
   
-  return workflow
+    return workflow
 
 # =============================================
 #            Create Parquet Dataset 
 # =============================================
 
 def create_parquet_dataset_definition(
-    data_paths,
+    # data_paths,
     recursive,
     # col_dtypes,
     frac_size,
+    bucket_name,
+    data_prefix,
     # sep='\t'
 ):
-  """Create nvt.Dataset definition for Parquet files."""
-  fs_spec = fsspec.filesystem('gs')
-  rec_symbol = '**' if recursive else '*'
+    from google.cloud import storage
+    storage_client = storage.Client()
+    
+    # BUCKET_NAME = 'spotify-builtin-2t' # 'spotify-merlin-v1' | spotify-builtin-2t
+    delimiter = '/'
+    FILE_PATTERN = "*.parquet"
 
-  valid_paths = []
-  for path in data_paths:
-    try:
-      if fs_spec.isfile(path):
-        valid_paths.append(path)
-      else:
-        path = os.path.join(path, rec_symbol)
-        for i in fs_spec.glob(path):
-          if fs_spec.isfile(i):
-            valid_paths.append(f'gs://{i}')
-    except FileNotFoundError as fnf_expt:
-      print(fnf_expt)
-      print('Incorrect path: {path}.')
-    except OSError as os_err:
-      print(os_err)
-      print('Verify access to the bucket.')
+    # ===========================
+    # train data
+    # ===========================
 
-  return nvt.Dataset(
-      path_or_source=valid_paths,
-      engine='parquet',
+    # TRAIN_PREFIX = 'train_data_parquet'
+    # TRAIN_PREFIX = 'nvt-preprocessing-spotify-v10-subset/nvt-processed/train'
+    data_paths = []
+
+    train_blobs = storage_client.list_blobs(bucket_name, prefix=f'{data_prefix}/', delimiter=delimiter)
+    for blob in train_blobs:
+        if blob.name[-7:] == 'parquet':
+            data_paths.append(f'gs://{bucket_name}/{blob.name}')
+    
+    """Create nvt.Dataset definition for Parquet files."""
+    fs_spec = fsspec.filesystem('gs')
+    rec_symbol = '**' if recursive else '*'
+
+    valid_paths = []
+    for path in data_paths:
+        try:
+            if fs_spec.isfile(path):
+                valid_paths.append(path)
+            else:
+                path = os.path.join(path, rec_symbol)
+                for i in fs_spec.glob(path):
+                    if fs_spec.isfile(i):
+                        valid_paths.append(f'gs://{i}')
+        except FileNotFoundError as fnf_expt:
+            print(fnf_expt)
+            print('Incorrect path: {path}.')
+        except OSError as os_err:
+            print(os_err)
+            print('Verify access to the bucket.')
+
+    return nvt.Dataset(
+        path_or_source=valid_paths,
+        engine='parquet',
       # names=list(col_dtypes.keys()),
       # sep=sep,
       # dtypes=col_dtypes,
-      part_mem_fraction=frac_size,
+        part_mem_fraction=frac_size,
       # assume_missing=True
   )
 
@@ -296,75 +319,76 @@ def convert_definition_to_parquet(
     output_files,
     shuffle=None
 ):
-  """Convert Parquet files to parquet and write to GCS."""
-  if shuffle == 'None':
-    shuffle = None
-  else:
-    try:
-      shuffle = getattr(Shuffle, shuffle)
-    except:
-      print('Shuffle method not available. Using default.')
-      shuffle = None
+    """Convert Parquet files to parquet and write to GCS."""
+    if shuffle == 'None':
+        shuffle = None
+    else:
+        try:
+            shuffle = getattr(Shuffle, shuffle)
+        except:
+            print('Shuffle method not available. Using default.')
+            shuffle = None
 
-  dataset.to_parquet(
-      output_path,
-      shuffle=shuffle,
-      output_files=output_files
-  )
+    dataset.to_parquet(
+        output_path,
+        shuffle=shuffle,
+        output_files=output_files
+    )
 
 # =============================================
 #            Create nv-tabular definition
 # =============================================
 def main_convert(args):
-  logging.info('Creating cluster')
-  client = create_cluster(
-    args.n_workers,
-    args.device_limit_frac,
-    args.device_pool_frac,
-    args.memory_limit
-  )
-  logging.info('Creating parquet dataset definition')
-  dataset = create_parquet_dataset_definition(
-    data_paths=args.parq_data_path, 
+    logging.info('Creating cluster')
+    client = create_cluster(
+        args.n_workers,
+        args.device_limit_frac,
+        args.device_pool_frac,
+        args.memory_limit
+    )
+    
+    logging.info('Creating parquet dataset definition')
+    dataset = create_parquet_dataset_definition(
+        data_paths=args.parq_data_path, 
     # args.sep,
-    recursive=False, 
+        recursive=False, 
     # get_criteo_col_dtypes(), 
-    frac_size=args.frac_size
-  )
+        frac_size=args.frac_size
+    )
 
-  logging.info('Converting definition to Parquet')
-  convert_definition_to_parquet(
-    args.output_path,
-    dataset,
-    args.output_files
-  )
+    logging.info('Converting definition to Parquet')
+    convert_definition_to_parquet(
+        args.output_path,
+        dataset,
+        args.output_files
+    )
 # =============================================
 #            Analyse Dataset 
 # =============================================
 def main_analyze(args):
-  logging.info('Creating cluster')
-  client = create_cluster(
-    args.n_workers,
-    args.device_limit_frac,
-    args.device_pool_frac,
-    args.memory_limit
-  )
+    logging.info('Creating cluster')
+    client = create_cluster(
+        args.n_workers,
+        args.device_limit_frac,
+        args.device_pool_frac,
+        args.memory_limit
+    )
+    
+    logging.info('Creating Parquet dataset')
+    dataset = create_parquet_nvt_dataset(
+        data_dir=args.parquet_data_path,
+        frac_size=args.frac_size
+    )
   
-  logging.info('Creating Parquet dataset')
-  dataset = create_parquet_nvt_dataset(
-    data_dir=args.parquet_data_path,
-    frac_size=args.frac_size
-  )
-  
-  logging.info('Creating Workflow')
+    logging.info('Creating Workflow')
   # Create Workflow
-  nvt_workflow = create_nvt_workflow()
+    nvt_workflow = create_nvt_workflow()
   
-  logging.info('Analyzing dataset')
-  nvt_workflow = nvt_workflow.fit(dataset)
+    logging.info('Analyzing dataset')
+    nvt_workflow = nvt_workflow.fit(dataset)
 
-  logging.info('Saving Workflow')
-  nvt_workflow.save(args.output_path)
+    logging.info('Saving Workflow')
+    nvt_workflow.save(args.output_path)
 # =============================================
 
 # =============================================

@@ -24,11 +24,11 @@ GKE_ACCELERATOR_KEY = 'cloud.google.com/gke-accelerator'
     pipeline_root=config.PREPROCESS_PARQUET_PIPELINE_ROOT
 )
 def preprocessing_parquet(
-    # bucket_name: str,
-    train_pattern: str,
-    valid_pattern: str,
-    # train_prefix: str,
-    # valid_prefix: str,
+    bucket_name: str,
+    # train_pattern: str,
+    # valid_pattern: str,
+    train_prefix: str,
+    valid_prefix: str,
     num_output_files_train: int,
     num_output_files_valid: int,
     output_path_defined_dir: str,
@@ -55,8 +55,8 @@ def preprocessing_parquet(
     parquet_to_def_train = (
         components.convert_parquet_op(
             bucket_name=BUCKET_NAME,
-            # data_path_prefix=train_prefix,
-            data_dir_pattern=train_pattern,
+            data_prefix=train_prefix,
+            # data_dir_pattern=train_pattern,
             split='train',
             num_output_files=num_output_files_train,
             n_workers=int(config.GPU_LIMIT),
@@ -75,8 +75,8 @@ def preprocessing_parquet(
     parquet_to_def_valid = (
         components.convert_parquet_op(
             bucket_name=BUCKET_NAME,
-            # data_path_prefix=valid_prefix,
-            data_dir_pattern=valid_pattern,
+            data_prefix=valid_prefix,
+            # data_dir_pattern=valid_pattern,
             split='valid',
             num_output_files=num_output_files_valid,
             n_workers=int(config.GPU_LIMIT),
