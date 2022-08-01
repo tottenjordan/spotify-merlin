@@ -162,7 +162,7 @@ def create_nvt_workflow():
     '''
     MAX_PADDING = 375
     item_id = ["track_uri_can"] >> Categorify(dtype="int32") >> ops.TagAsItemID() >> ops.AddMetadata(tags=["user_item"])
-#   playlist_id = ["pid_pos_id"] >> Categorify(dtype="int32") >> TagAsUserID() 
+    playlist_id = ["pid_pos_id"] >> Categorify(dtype="int32") >> TagAsUserID() 
   
     item_features_cat = [
         'artist_name_can',
@@ -227,9 +227,9 @@ def create_nvt_workflow():
 
     item_feature_cont_node =  item_features_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsItemFeatures()
 
-    playlist_feature_cat_node = playlist_features_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> TagAsUserFeatures() 
+    playlist_feature_cat_node = playlist_features_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> TagAsUserFeatures() >> AddMetadata(Tags.CONTEXT)
 
-    playlist_feature_cont_node = playlist_features_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsUserFeatures()
+    playlist_feature_cont_node = playlist_features_cont >> nvt.ops.FillMissing() >>  nvt.ops.Normalize() >> TagAsUserFeatures() >> AddMetadata(Tags.CONTEXT)
 
     playlist_feature_cat_seq_node = seq_feats_cat >> nvt.ops.FillMissing() >> Categorify(dtype="int32") >> ListSlice(MAX_PADDING, pad=True, pad_value=0) >> TagAsUserFeatures() >> nvt.ops.AddTags(Tags.SEQUENCE) 
 
@@ -243,7 +243,7 @@ def create_nvt_workflow():
     + playlist_feature_cont_node \
     + playlist_feature_cont_seq_node \
     + playlist_feature_cat_seq_node \
-  # playlist_id \
+    + playlist_id 
 
     workflow = nvt.Workflow(output)
   
@@ -395,98 +395,121 @@ def main_analyze(args):
 #            Transform Dataset 
 # =============================================
 def main_transform(args):
-  client = create_cluster(
-      args.n_workers,
-      args.device_limit_frac,
-      args.device_pool_frac,
-      args.memory_limit
-  )
+    client = create_cluster(
+        args.n_workers,
+        args.device_limit_frac,
+        args.device_pool_frac,
+        args.memory_limit
+    )
 
-  # nvt_workflow = create_nvt_workflow()
-  nvt_workflow = nvt.Workflow.load(args.workflow_path, client)
+    # nvt_workflow = create_nvt_workflow()
+    nvt_workflow = nvt.Workflow.load(args.workflow_path, client)
 
-  dataset = create_parquet_nvt_dataset(args.parquet_data_path, frac_size=args.frac_size)
+    dataset = create_parquet_nvt_dataset(args.parquet_data_path, frac_size=args.frac_size)
 
-  logging.info('Transforming Dataset')
-  transformed_dataset = nvt_workflow.transform(dataset)
+    logging.info('Transforming Dataset')
+    transformed_dataset = nvt_workflow.transform(dataset)
 
-  logging.info('Saving transformed dataset')
-  save_dataset(
-      transformed_dataset,
-      output_path=args.output_path,
-      output_files=args.output_files,
-      # categorical_cols=CAT,
-      # continuous_cols=CONT,
-      shuffle=nvt.io.Shuffle.PER_PARTITION,
-  )
-
-  # =============================================
-  #            args
-  # =============================================
+    logging.info('Saving transformed dataset')
+    save_dataset(
+        transformed_dataset,
+        output_path=args.output_path,
+        output_files=args.output_files,
+        # categorical_cols=CAT,
+        # continuous_cols=CONT,
+        shuffle=nvt.io.Shuffle.PER_PARTITION,
+    )
+    # =============================================
+    #            args
+    # =============================================
 def parse_args():
-  """Parses command line arguments."""
+    """Parses command line arguments."""
 
-  parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser()
   
-  parser.add_argument('--task',
-                      type=str,
-                      required=False)
-  parser.add_argument('--parquet_data_path',
-                      type=str,
-                      required=False)
-  parser.add_argument('--parq_data_path',
-                      required=False,
-                      nargs='+')
-  parser.add_argument('--output_path',
-                      type=str,
-                      required=False)
-  parser.add_argument('--output_files',
-                      type=int,
-                      required=False)
-  parser.add_argument('--workflow_path',
-                      type=str,
-                      required=False)
-  parser.add_argument('--n_workers',
-                      type=int,
-                      required=False)
-  parser.add_argument('--frac_size',
-                      type=float,
-                      required=False,
-                      default=0.10)
-  parser.add_argument('--memory_limit',
-                      type=int,
-                      required=False,
-                      default=100_000_000_000)
-  parser.add_argument('--device_limit_frac',
-                      type=float,
-                      required=False,
-                      default=0.60)
-  parser.add_argument('--device_pool_frac',
-                      type=float,
-                      required=False,
-                      default=0.90)
+    parser.add_argument(
+        '--task',
+        type=str,
+        required=False
+    )
+    parser.add_argument(
+        '--parquet_data_path',
+        type=str,
+        required=False
+    )
+    parser.add_argument(
+        '--parq_data_path',
+        required=False,
+        nargs='+'
+    )
+    parser.add_argument(
+        '--output_path',
+        type=str,
+        required=False
+    )
+    parser.add_argument(
+        '--output_files',
+        type=int,
+        required=False
+    )
+    parser.add_argument(
+        '--workflow_path',
+        type=str,
+        required=False
+    )
+    parser.add_argument(
+        '--n_workers',
+        type=int,
+        required=False
+    )
+    parser.add_argument(
+        '--frac_size',
+        type=float,
+        required=False,
+        default=0.10
+    )
+    parser.add_argument(
+        '--memory_limit',
+        type=int,
+        required=False,
+        default=100_000_000_000
+    )
+    parser.add_argument(
+        '--device_limit_frac',
+        type=float,
+        required=False,
+        default=0.60
+    )
+    parser.add_argument(
+        '--device_pool_frac',
+        type=float,
+        required=False,
+        default=0.90
+    )
 
-  return parser.parse_args()
+    return parser.parse_args()
   
 
 if __name__ == '__main__':
-  logging.basicConfig(format='%(asctime)s - %(message)s',
-                      level=logging.INFO, 
-                      datefmt='%d-%m-%y %H:%M:%S',
-                      stream=sys.stdout)
+    logging.basicConfig(
+        format='%(asctime)s - %(message)s',
+        level=logging.INFO, 
+        datefmt='%d-%m-%y %H:%M:%S',
+        stream=sys.stdout
+    )
 
-  parsed_args = parse_args()
+    parsed_args = parse_args()
 
-  start_time = time.time()
-  logging.info('Timing task')
+    start_time = time.time()
+    logging.info('Timing task')
 
-  if parsed_args.task == 'transform':
-    main_transform(parsed_args)
-  elif parsed_args.task == 'analyze':
-    main_analyze(parsed_args)
-  elif parsed_args.task == 'convert':
-    main_convert(parsed_args)
+    if parsed_args.task == 'transform':
+        main_transform(parsed_args)
+    elif parsed_args.task == 'analyze':
+        main_analyze(parsed_args)
+    elif parsed_args.task == 'convert':
+        main_convert(parsed_args)
 
-  end_time = time.time()
-  elapsed_time = end_time - start_time
-  logging.info('Task completed. Elapsed time: %s', elapsed_time)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    logging.info('Task completed. Elapsed time: %s', elapsed_time)
