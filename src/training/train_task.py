@@ -139,7 +139,7 @@ def parse_args():
         '--valid_dir',
         type=str,
         required=True,
-        help='Path to training data _file_list.txt'
+        help='Path to validation data _file_list.txt'
     )
     parser.add_argument(
         '--schema',
