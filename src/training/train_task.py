@@ -20,12 +20,14 @@ import os
 import sys
 import time
 
-import hugectr
+# import hugectr
 # from hugectr.inference import CreateInferenceSession
 # from hugectr.inference import InferenceParams
-import hypertune
+# import hypertune
 from two_tower_model import create_two_tower
 import utils
+import merlin.models.tf as mm
+from merlin.io.dataset import Dataset # as MerlinDataset
 
 SNAPSHOT_DIR = 'snapshots'
 HYPERTUNE_METRIC_NAME = 'AUC'
@@ -59,10 +61,12 @@ def save_model(model, model_name, model_dir):
     model.graph_to_json(graph_config_file=graph_path)
     
     keras_path = os.path.join(model_dir, '2tower')
+    logging.info('Saving model to keras_path: %s', keras_path)
     model.save(keras_path)
     
     query_tower = model.retrieval_block.query_block()
     query_tower_path = os.path.join(model_dir, 'query-tower')
+    logging.info('Saving query_tower to query_tower_path: %s', query_tower_path)
     query_tower.save(query_tower_path)
     
 
@@ -75,19 +79,21 @@ def main(args):
     num_gpus = sum([len(gpus) for gpus in args.gpus])
     batch_size = num_gpus * args.per_gpu_batch_size
     
-    train_data = MerlinDataset(args.train_dir + "/*.parquet", part_size="500MB")
-    valid_data = MerlinDataset(args.valid_dir + "/*.parquet", part_size="500MB")
+    train_data = Dataset(args.train_dir + "/*.parquet", part_size="500MB")
+    valid_data = Dataset(args.valid_dir + "/*.parquet", part_size="500MB")
 
     model = create_two_tower(
         train_dir=args.train_dir,
         valid_dir=args.valid_dir,
         workflow_dir=args.workflow_dir,
-        layer_sizes=args.layer_sizes,
+        # layer_sizes=args.layer_sizes,
         gpus=args.gpus
     )
     
+    # model.set_retrieval_candidates_for_evaluation(train_data)
+    model.compile(optimizer="adam", run_eagerly=False, metrics=[mm.RecallAt(1), mm.RecallAt(10), mm.NDCGAt(10)])
     
-    model.summary()
+    # model.summary()
 
     logging.info('Starting model training')
     model.fit(
@@ -95,7 +101,7 @@ def main(args):
     )
 
 
-    logging.info('Saving model')
+    logging.info(f'Saving model to {model_dir}')
     save_model(model, args.model_name, model_dir)
 
     # logging.info('Starting model evaluation using %s batches ...', args.eval_batches)
@@ -174,16 +180,16 @@ def parse_args():
     )
     parser.add_argument(
         '--layer_sizes',
-        type=int,
-        required=True,
+        type=str,
+        required=False,
         help='layer_sizes'
     )
-    # parser.add_argument(
-    #     '--num_epochs',
-    #     type=int,
-    #     required=True,
-    #     help='num_epochs
-    # )
+    parser.add_argument(
+        '--workflow_dir',
+        type=str,
+        required=False,
+        help='Path to saved workflow.pkl e.g., nvt-analyzed'
+    )
     
     return parser.parse_args()
 

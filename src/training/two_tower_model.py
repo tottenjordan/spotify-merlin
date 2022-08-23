@@ -11,16 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""DeepFM Network in HugeCTR."""
+
 from typing import List, Any
 # import hugectr
-from mpi4py import MPI
+# from mpi4py import MPI
 
 from merlin.models.utils.example_utils import workflow_fit_transform
 from merlin.schema.tags import Tags
 import merlin.models.tf as mm
-from merlin.io.dataset import Dataset as MerlinDataset
+from merlin.io.dataset import Dataset # as MerlinDataset
+import nvtabular as nvt
 import nvtabular.ops as ops
+
+
+import tensorflow as tf
 
 def create_two_tower(
     train_dir: str,
@@ -50,16 +54,28 @@ def create_two_tower(
     schema = workflow.output_schema
     embeddings = ops.get_embedding_sizes(workflow)
         
-    train_data = MerlinDataset(train_dir + "/*.parquet", part_size="500MB")
-    valid_data = MerlinDataset(valid_dir + "/*.parquet", part_size="500MB")
+    # train_data = Dataset(train_dir + "/*.parquet", part_size="500MB")
+    # valid_data = Dataset(valid_dir + "/*.parquet", part_size="500MB")
 
     # =========================================================
     #             remove sequence features # TODO: parameterize
     # =========================================================
-    two_t_schema = schema.select_by_tag([Tags.ITEM_ID, Tags.ITEM, Tags.USER, Tags.USER_ID])
-    two_t_schema_seq = schema.select_by_tag([Tags.SEQUENCE])
-    non_seq_col_names = list(set(two_t_schema.column_names) - set(two_t_schema_seq.column_names))
-    two_t_schema = two_t_schema[non_seq_col_names]
+    # two_t_schema = schema.select_by_tag([Tags.ITEM_ID, Tags.ITEM, Tags.USER, Tags.USER_ID])
+    # two_t_schema_seq = schema.select_by_tag([Tags.SEQUENCE])
+    # non_seq_col_names = list(set(two_t_schema.column_names) - set(two_t_schema_seq.column_names))
+    # two_t_schema = two_t_schema[non_seq_col_names]
+    
+    # removing continuous-sequence features only
+    cont_seq_cols = [
+        'duration_ms_songs_pl',
+        'artist_pop_pl',
+        'artists_followers_pl',
+        'track_pop_pl',
+        'pid_pos_id',
+    ]
+
+    use_these_cols = list(set(schema.column_names) - set(cont_seq_cols))
+    two_t_schema = schema[use_these_cols]
         
     model = mm.TwoTowerModel(
         two_t_schema,
@@ -69,6 +85,7 @@ def create_two_tower(
         embedding_options=mm.EmbeddingOptions(infer_embedding_sizes=True),
     )
     
-    model.compile(optimizer="adam", run_eagerly=False, metrics=[mm.RecallAt(1), mm.RecallAt(10), mm.NDCGAt(10)])
+    # model.set_retrieval_candidates_for_evaluation(train_data)
+    # model.compile(optimizer="adam", run_eagerly=False, metrics=[mm.RecallAt(1), mm.RecallAt(10), mm.NDCGAt(10)])
     
     return model

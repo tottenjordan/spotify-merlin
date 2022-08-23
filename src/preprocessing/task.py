@@ -71,6 +71,29 @@ playlist_features_cont = [
   'num_artists_pl',
   'num_albums_pl',
 ]
+
+# =============================================
+#            subset of features to be tagged
+# =============================================
+
+# continuous sequence features not yet supported
+# seq_feats_cont = [
+#         'duration_ms_songs_pl',
+#         'artist_pop_pl',
+#         'artists_followers_pl',
+#         'track_pop_pl',
+#     ]
+
+seq_feats_cat = [
+        'artist_name_pl',
+        # 'track_uri_pl',
+        'track_name_pl',
+        'album_name_pl',
+        'artist_genres_pl',
+        # 'pid_pos_id', 
+        # 'pos_pl'
+    ]
+
 CAT = playlist_features_cat + item_features_cat
 CONT = item_features_cont + playlist_features_cont
 # =========================================
