@@ -52,22 +52,68 @@ def set_job_dirs():
 def save_model(model, model_name, model_dir):
     """Saves model graph and model parameters."""
 
-    parameters_path = os.path.join(model_dir, model_name)
-    logging.info('Saving model parameters to: %s', parameters_path)
-    model.save_params_to_files(prefix=parameters_path)
+    # parameters_path = os.path.join(model_dir, model_name)
+    # logging.info('Saving model parameters to: %s', parameters_path)
+    # model.save_params_to_files(prefix=parameters_path)
 
-    graph_path = os.path.join(model_dir, f'{model_name}.json')
-    logging.info('Saving model graph to: %s', graph_path)
-    model.graph_to_json(graph_config_file=graph_path)
+    # graph_path = os.path.join(model_dir, f'{model_name}.json')
+    # logging.info('Saving model graph to: %s', graph_path)
+    # model.graph_to_json(graph_config_file=graph_path)
     
-    keras_path = os.path.join(model_dir, '2tower')
-    logging.info('Saving model to keras_path: %s', keras_path)
-    model.save(keras_path)
+    # keras_path = os.path.join(model_dir, '2tower')
+    # logging.info('Saving model to keras_path: %s', keras_path)
+    # model.save(keras_path)
     
     query_tower = model.retrieval_block.query_block()
     query_tower_path = os.path.join(model_dir, 'query-tower')
     logging.info('Saving query_tower to query_tower_path: %s', query_tower_path)
     query_tower.save(query_tower_path)
+    
+def save_item_embeddings(model, model_name, model_dir, workflow_dir):
+    """
+    Extracts and saves item embeddings 
+    used for candidate generation
+    """
+    logging.info(f'Loading workflow and schema: {workflow_dir}')
+    workflow = nvt.Workflow.load(f"{workflow_dir}")
+    schema = workflow.output_schema
+
+    item_features = (
+        unique_rows_by_features(train, Tags.ITEM, Tags.ITEM_ID)
+        .compute()
+        .reset_index(drop=True)
+    )
+    logging.info(f'Shape of item embeddings: {item_features.shape}')
+    
+    item_embs = model.item_embeddings(
+        Dataset(item_features, schema=schema), batch_size=1024
+    )
+    item_embs_df = item_embs.compute(scheduler="synchronous")
+    
+    drop_cols = schema.select_by_tag([Tags.ITEM]).column_names
+    drop_cols.remove('track_uri_can')
+    
+    item_embeddings = item_embs_df.drop(
+        columns=drop_cols
+    )
+    
+    # read unique item IDs
+    unique_item_ids_uri = f'{workflow_dir}/categories/unique.track_uri_can.parquet'
+    logging.info(f'Reading Unique Item IDs from: {unique_item_ids_uri}')
+    item_data = pd.read_parquet(f'{unique_item_ids_uri}')
+    
+    lookup_dict = dict(item_data['track_uri_can'])
+    
+    item_embeddings_pd = item_embeddings.to_pandas()
+    item_embeddings_pd['track_uri_can'] = item_embeddings_pd['track_uri_can'].apply(lambda l: lookup_dict[l].encode('utf-8'))
+    
+    item_emb_path = os.path.join(model_dir, 'candidate-embeddings')
+    
+    # save embeddings to parquet and CSV
+    item_embeddings_pd.to_parquet(os.path.join(item_emb_path, "candidate_track_embeddings.parquet"))
+    item_embeddings_pd.to_csv(os.path.join(item_emb_path, "candidate_track_embeddings.csv"), encoding='utf-8', index=False)
+    
+    logging.info(f'Candidate Item Embeddings for ANN index: {item_emb_path}/candidate_track_embeddings.csv')
     
 
     
@@ -92,18 +138,16 @@ def main(args):
     
     # model.set_retrieval_candidates_for_evaluation(train_data)
     model.compile(optimizer="adam", run_eagerly=False, metrics=[mm.RecallAt(1), mm.RecallAt(10), mm.NDCGAt(10)])
-    
-    # model.summary()
 
     logging.info('Starting model training')
     model.fit(
         train_data, validation_data=valid_data, batch_size=batch_size, epochs=args.num_epochs
     )
 
-
     logging.info(f'Saving model to {model_dir}')
-    save_model(model, args.model_name, model_dir)
-
+    save_model(model, args.model_name, args.model_dir)
+    save_item_embeddings(model, args.model_name, args.model_dir, args.workflow_dir)
+    
     # logging.info('Starting model evaluation using %s batches ...', args.eval_batches)
     # metric_value = evaluate_model(model_name=args.model_name,
     #                             model_dir=model_dir,
@@ -190,9 +234,14 @@ def parse_args():
         required=False,
         help='Path to saved workflow.pkl e.g., nvt-analyzed'
     )
+    parser.add_argument(
+        '--model_dir',
+        type=str,
+        required=True,
+        help='Path for saving model artifacts'
+    )
     
     return parser.parse_args()
-
 
 if __name__ == '__main__':
     logging.basicConfig(

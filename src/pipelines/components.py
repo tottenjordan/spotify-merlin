@@ -394,3 +394,5 @@ def transform_dataset_op(
         cards.append(col.properties['embedding_sizes']['cardinality'])
 
     transformed_dataset.metadata['cardinalities'] = cards
+    transformed_dataset.metadata['dataset_gcs_uri'] = _gcs_uri_destination
+    

@@ -38,6 +38,12 @@ MEMORY_LIMIT = os.getenv("MEMORY_LIMIT", "624G")
 GPU_LIMIT = os.getenv("GPU_LIMIT", "4")
 GPU_TYPE = os.getenv("GPU_TYPE", "NVIDIA_TESLA_T4")
 
+# INSTANCE_TYPE = os.getenv("INSTANCE_TYPE", "a2-highgpu-1g")
+# CPU_LIMIT = os.getenv("CPU_LIMIT", "96")
+# MEMORY_LIMIT = os.getenv("MEMORY_LIMIT", "680")
+# GPU_LIMIT = os.getenv("GPU_LIMIT", "2")
+# GPU_TYPE = os.getenv("GPU_TYPE", "NVIDIA_TESLA_A100")
+
 # train & valid parquet files
 # TRAIN_DIR_PARQUET = os.getenv("TRAIN_DIR_PARQUET", "gs://spotify-builtin-2t/train_data_parquet/0000000000**.snappy.parquet")
 # VALID_DIR_PARQUET = os.getenv("VALID_DIR_PARQUET", "gs://spotify-builtin-2t/validation_data_parquet/00000000000*.snappy.parquet")
