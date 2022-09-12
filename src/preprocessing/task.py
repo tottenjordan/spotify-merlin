@@ -127,20 +127,27 @@ def create_cluster(
 # def create_parquet_nvt_dataset(data_dir, frac_size):
 #   return nvt.Dataset(f'{data_dir}', engine='parquet', part_mem_fraction=frac_size)
 def create_parquet_nvt_dataset(
-    data_path,
-    frac_size
+    # data_path,
+    frac_size,
+    data_prefix,
+    # bucket,
 ):
     """Create a nvt.Dataset definition for the parquet files."""
+    
+    BUCKET = 'gs://spotify-builtin-2t'
+    DATA_PATH = f"{BUCKET}/{data_prefix}/0000000000**.snappy.parquet"
     fs = fsspec.filesystem('gs')
-    file_list = fs.glob(
-        os.path.join(data_path, '*.parquet')
-    )
+    
+    file_list = fs.glob(DATA_PATH)
+        # os.path.join(data_path, '*.parquet')
+    # )
 
     if not file_list:
         raise FileNotFoundError('Parquet file(s) not found')
 
     file_list = [os.path.join('gs://', i) for i in file_list]
 
+    # return nvt.Dataset(f"{bucket_name}/{data_prefix}/0000000000**.snappy.parquet", part_mem_fraction=frac_size)
     return nvt.Dataset(
         file_list,
         engine='parquet',
@@ -288,53 +295,58 @@ def create_parquet_dataset_definition(
     from google.cloud import storage
     storage_client = storage.Client()
     
-    # BUCKET_NAME = 'spotify-builtin-2t' # 'spotify-merlin-v1' | spotify-builtin-2t
-    delimiter = '/'
-    FILE_PATTERN = "*.parquet"
+#     # BUCKET_NAME = 'spotify-builtin-2t' # 'spotify-merlin-v1' | spotify-builtin-2t
+#     delimiter = '/'
+#     # FILE_PATTERN = "*.parquet"
+#     FILE_PATTERN = "0000000000**.snappy.parquet"
 
-    # ===========================
-    # train data
-    # ===========================
+#     # ===========================
+#     # train data
+#     # ===========================
 
-    # TRAIN_PREFIX = 'train_data_parquet'
-    # TRAIN_PREFIX = 'nvt-preprocessing-spotify-v10-subset/nvt-processed/train'
-    data_paths = []
+#     # TRAIN_PREFIX = 'train_data_parquet'
+#     # TRAIN_PREFIX = 'nvt-preprocessing-spotify-v10-subset/nvt-processed/train'
+#     data_paths = []
 
-    train_blobs = storage_client.list_blobs(bucket_name, prefix=f'{data_prefix}/', delimiter=delimiter)
-    for blob in train_blobs:
-        if blob.name[-7:] == 'parquet':
-            data_paths.append(f'gs://{bucket_name}/{blob.name}')
+#     train_blobs = storage_client.list_blobs(bucket_name, prefix=f'{data_prefix}/', delimiter=delimiter)
+#     for blob in train_blobs:
+#         if blob.name[-7:] == 'parquet':
+#             data_paths.append(f'gs://{bucket_name}/{blob.name}')
     
-    """Create nvt.Dataset definition for Parquet files."""
-    fs_spec = fsspec.filesystem('gs')
-    rec_symbol = '**' if recursive else '*'
+#     """Create nvt.Dataset definition for Parquet files."""
+#     fs_spec = fsspec.filesystem('gs')
+#     rec_symbol = '**' if recursive else '*'
 
-    valid_paths = []
-    for path in data_paths:
-        try:
-            if fs_spec.isfile(path):
-                valid_paths.append(path)
-            else:
-                path = os.path.join(path, rec_symbol)
-                for i in fs_spec.glob(path):
-                    if fs_spec.isfile(i):
-                        valid_paths.append(f'gs://{i}')
-        except FileNotFoundError as fnf_expt:
-            print(fnf_expt)
-            print('Incorrect path: {path}.')
-        except OSError as os_err:
-            print(os_err)
-            print('Verify access to the bucket.')
-
-    return nvt.Dataset(
-        path_or_source=valid_paths,
-        engine='parquet',
-      # names=list(col_dtypes.keys()),
-      # sep=sep,
-      # dtypes=col_dtypes,
-        part_mem_fraction=frac_size,
-      # assume_missing=True
-  )
+#     valid_paths = []
+#     for path in data_paths:
+#         try:
+#             if fs_spec.isfile(path):
+#                 valid_paths.append(path)
+#             else:
+#                 path = os.path.join(path, rec_symbol)
+#                 for i in fs_spec.glob(path):
+#                     if fs_spec.isfile(i):
+#                         valid_paths.append(f'gs://{i}')
+#         except FileNotFoundError as fnf_expt:
+#             print(fnf_expt)
+#             print('Incorrect path: {path}.')
+#         except OSError as os_err:
+#             print(os_err)
+#             print('Verify access to the bucket.')
+            
+    # DATASET_DEFINITION = f"gs://{bucket_name}/{data_prefix}/0000000000**.snappy.parquet" 
+    DATASET_DEFINITION = 'gs://spotify-builtin-2t/train_data_parquet/0000000000**.snappy.parquet' # TODO: use to create subset of train data
+    logging.info(f'DATASET_DEFINITION: {DATASET_DEFINITION}')
+    return nvt.Dataset(f"{DATASET_DEFINITION}", engine='parquet', part_mem_fraction=frac_size)
+    # return nvt.Dataset(
+  #       path_or_source=valid_paths, # [50:] # to process subset of paths
+  #       engine='parquet',
+  #     # names=list(col_dtypes.keys()),
+  #     # sep=sep,
+  #     # dtypes=col_dtypes,
+  #       part_mem_fraction=frac_size,
+  #     # assume_missing=True
+  # )
 
 def convert_definition_to_parquet(
     output_path,
@@ -372,10 +384,10 @@ def main_convert(args):
     
     logging.info('Creating parquet dataset definition')
     dataset = create_parquet_dataset_definition(
-        data_paths=args.parq_data_path, 
-    # args.sep,
-        recursive=False, 
-    # get_criteo_col_dtypes(), 
+        # data_paths=args.parq_data_path,
+        recursive=False,
+        bucket_name='spotify-builtin-2t', # TODO: parameterize
+        data_prefix='train',
         frac_size=args.frac_size
     )
 
@@ -399,8 +411,9 @@ def main_analyze(args):
     
     logging.info('Creating Parquet dataset')
     dataset = create_parquet_nvt_dataset(
-        data_dir=args.parquet_data_path,
-        frac_size=args.frac_size
+        # data_dir=args.parquet_data_path,
+        frac_size=args.frac_size,
+        data_prefix='train_data_parquet'
     )
   
     logging.info('Creating Workflow')

@@ -102,8 +102,7 @@ def convert_parquet_op(
     #            Define data paths
     # =========================================================
     logging.info(f'bucket_name: {bucket_name}')
-    # logging.info(f'data_path_prefix: {data_path_prefix}')
-    # logging.info(f'data_dir_pattern: {data_prefix}')
+    logging.info(f'data_prefix: {data_prefix}')
 
     
 #     delimiter = '/'
@@ -229,6 +228,7 @@ def transform_dataset_op(
     output_path_defined_dir: str,
     output_path_transformed_dir: str,
     output_path_analyzed_dir: str,
+    version: str,
     split: str,
     num_output_files: int,
     n_workers: int,
@@ -328,7 +328,7 @@ def transform_dataset_op(
     _local_directory = os.getcwd()
     
     _bucket_name='spotify-merlin-v1'
-    _prefix='nvt-preprocessing-spotify-v09-subset/nvt-processed/train'
+    _prefix=f'nvt-preprocessing-spotify-{version}/nvt-processed/{split}'
     _filename='_file_list.txt'
     _source_blob_name = f'{_prefix}/{_filename}'
     logging.info(f'_source_blob_name: {_source_blob_name}')

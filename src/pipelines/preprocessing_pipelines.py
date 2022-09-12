@@ -16,12 +16,23 @@
 from . import components
 from . import config
 from kfp.v2 import dsl
+import os
 
 GKE_ACCELERATOR_KEY = 'cloud.google.com/gke-accelerator'
 
+# TODO: parametrize and fix config file 
+BUCKET_parquet = 'spotify-builtin-2t'
+BUCKET = 'spotify-merlin-v1'
+VERSION = 'v32-subset'
+APP = 'spotify'
+MODEL_DISPLAY_NAME = f'nvt-preprocessing-{APP}-{VERSION}'
+WORKSPACE = f'gs://{BUCKET}/{MODEL_DISPLAY_NAME}'
+PREPROCESS_PARQUET_PIPELINE_NAME = f'nvtabular-parquet-pipeline-{VERSION}'
+PREPROCESS_PARQUET_PIPELINE_ROOT = os.path.join(WORKSPACE, PREPROCESS_PARQUET_PIPELINE_NAME)
+
 @dsl.pipeline(
-    name=config.PREPROCESS_PARQUET_PIPELINE_NAME,
-    pipeline_root=config.PREPROCESS_PARQUET_PIPELINE_ROOT
+    name=f'{PREPROCESS_PARQUET_PIPELINE_NAME}', #config.PREPROCESS_PARQUET_PIPELINE_NAME,
+    pipeline_root=f'{PREPROCESS_PARQUET_PIPELINE_ROOT}' # config.PREPROCESS_PARQUET_PIPELINE_ROOT
 )
 def preprocessing_parquet(
     bucket_name: str,
@@ -34,7 +45,8 @@ def preprocessing_parquet(
     output_path_defined_dir: str,
     output_path_analyzed_dir: str,
     output_path_transformed_dir: str,
-    shuffle: str
+    shuffle: str,
+    version: str,
 ):
     '''
     
@@ -127,7 +139,8 @@ def preprocessing_parquet(
             output_path_transformed_dir=f'{output_path_transformed_dir}',
             output_path_analyzed_dir=output_path_analyzed_dir,
             num_output_files=num_output_files_train,
-            n_workers=int(config.GPU_LIMIT)
+            n_workers=int(config.GPU_LIMIT),
+            version=version,
         )
     )
     transform_train.set_display_name('Transform train split')
@@ -150,7 +163,8 @@ def preprocessing_parquet(
             output_path_transformed_dir=f'{output_path_transformed_dir}',
             output_path_analyzed_dir=output_path_analyzed_dir,
             num_output_files=num_output_files_valid,
-            n_workers=int(config.GPU_LIMIT)
+            n_workers=int(config.GPU_LIMIT),
+            version=version,
         )
     )
     transform_valid.set_display_name('Transform valid split')

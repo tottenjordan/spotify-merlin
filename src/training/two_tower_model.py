@@ -23,6 +23,7 @@ from merlin.io.dataset import Dataset # as MerlinDataset
 import nvtabular as nvt
 import nvtabular.ops as ops
 
+import logging
 
 import tensorflow as tf
 
@@ -75,6 +76,7 @@ def create_two_tower(
     ]
 
     use_these_cols = list(set(schema.column_names) - set(cont_seq_cols))
+    logging.info(f'use_these_cols: {use_these_cols}')
     two_t_schema = schema[use_these_cols]
         
     model = mm.TwoTowerModel(
@@ -84,8 +86,5 @@ def create_two_tower(
         samplers=[mm.InBatchSampler()],
         embedding_options=mm.EmbeddingOptions(infer_embedding_sizes=True),
     )
-    
-    # model.set_retrieval_candidates_for_evaluation(train_data)
-    # model.compile(optimizer="adam", run_eagerly=False, metrics=[mm.RecallAt(1), mm.RecallAt(10), mm.NDCGAt(10)])
     
     return model
