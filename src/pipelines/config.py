@@ -38,6 +38,7 @@ MEMORY_LIMIT = os.getenv("MEMORY_LIMIT", "624G")
 GPU_LIMIT = os.getenv("GPU_LIMIT", "4")
 GPU_TYPE = os.getenv("GPU_TYPE", "NVIDIA_TESLA_T4")
 
+TF_CONFIG = os.getenv("TF_CONFIG","Not found")
 # INSTANCE_TYPE = os.getenv("INSTANCE_TYPE", "a2-highgpu-1g")
 # CPU_LIMIT = os.getenv("CPU_LIMIT", "96")
 # MEMORY_LIMIT = os.getenv("MEMORY_LIMIT", "680")
