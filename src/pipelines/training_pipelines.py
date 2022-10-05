@@ -11,37 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Preprocessing pipelines."""
+"""Training pipelines."""
+
+import json
+import time
+import os
 
 from . import components
 from . import config
 from kfp.v2 import dsl
-import os
 
 GKE_ACCELERATOR_KEY = 'cloud.google.com/gke-accelerator'
 
-# TODO: parametrize and fix config file 
-# BUCKET_parquet = 'spotify-builtin-2t'
-# BUCKET = 'spotify-merlin-v1'
-# VERSION = 'v32-subset'
-# APP = 'spotify'
-# MODEL_DISPLAY_NAME = f'nvt-preprocessing-{APP}-{VERSION}'
-# WORKSPACE = f'gs://{config.BUCKET}/{MODEL_DISPLAY_NAME}'
-# PREPROCESS_PARQUET_PIPELINE_NAME = f'nvtabular-parquet-pipeline-{VERSION}'
-# PREPROCESS_PARQUET_PIPELINE_ROOT = os.path.join(WORKSPACE, PREPROCESS_PARQUET_PIPELINE_NAME)
 
 @dsl.pipeline(
-    name=f'{config.PREPROCESS_PARQUET_PIPELINE_NAME}', #config.PREPROCESS_PARQUET_PIPELINE_NAME,
-    pipeline_root=f'{config.PREPROCESS_PARQUET_PIPELINE_ROOT}' # config.PREPROCESS_PARQUET_PIPELINE_ROOT
+    name=config.TRAINING_PIPELINE_NAME,
+    pipeline_root=config.TRAINING_PIPELINE_ROOT
 )
-def preprocessing_parquet(
-    bucket_data_src: str,
-    bucket_data_output: str,
-    # train_pattern: str,
-    # valid_pattern: str,
+def training_pipeline(
+    bucket_name: str,
     train_prefix: str,
     valid_prefix: str,
-    file_pattern: str,
     num_output_files_train: int,
     num_output_files_valid: int,
     output_path_defined_dir: str,
@@ -49,7 +39,6 @@ def preprocessing_parquet(
     output_path_transformed_dir: str,
     shuffle: str,
     version: str,
-    app: str,
 ):
     '''
     
@@ -65,11 +54,11 @@ def preprocessing_parquet(
     # =========================================================
     #             Convert from parquet to def 
     # =========================================================
-    # config.BUCKET_NAME = 'spotify-builtin-2t' # 'spotify-merlin-v1' # TODO: parameterize
+    BUCKET_NAME = 'spotify-builtin-2t' # 'spotify-merlin-v1' # TODO: parameterize
     
     parquet_to_def_train = (
         components.convert_parquet_op(
-            bucket_name=bucket_data_src,
+            bucket_name=BUCKET_NAME,
             data_prefix=train_prefix,
             # data_dir_pattern=train_pattern,
             split='train',
@@ -77,7 +66,6 @@ def preprocessing_parquet(
             n_workers=int(config.GPU_LIMIT),
             shuffle=shuffle,
             output_path_defined_dir=output_path_defined_dir,
-            file_pattern=file_pattern,
         )
     )
     parquet_to_def_train.set_display_name('Convert training split')
@@ -90,7 +78,7 @@ def preprocessing_parquet(
     # === Convert eval dataset from CSV to Parquet
     parquet_to_def_valid = (
         components.convert_parquet_op(
-            bucket_name=bucket_data_src,
+            bucket_name=BUCKET_NAME,
             data_prefix=valid_prefix,
             # data_dir_pattern=valid_pattern,
             split='valid',
@@ -98,7 +86,6 @@ def preprocessing_parquet(
             n_workers=int(config.GPU_LIMIT),
             shuffle=shuffle,
             output_path_defined_dir=output_path_defined_dir,
-            file_pattern=file_pattern,
         )
     )
     parquet_to_def_valid.set_display_name('Convert validation split')
@@ -146,9 +133,6 @@ def preprocessing_parquet(
             num_output_files=num_output_files_train,
             n_workers=int(config.GPU_LIMIT),
             version=version,
-            bucket_data_src=bucket_data_src,
-            bucket_data_output=bucket_data_output,
-            app=app,
         )
     )
     transform_train.set_display_name('Transform train split')
@@ -173,9 +157,6 @@ def preprocessing_parquet(
             num_output_files=num_output_files_valid,
             n_workers=int(config.GPU_LIMIT),
             version=version,
-            bucket_data_src=bucket_data_src,
-            bucket_data_output=bucket_data_output,
-            app=app,
         )
     )
     transform_valid.set_display_name('Transform valid split')

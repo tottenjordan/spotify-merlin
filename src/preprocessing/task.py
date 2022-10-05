@@ -124,18 +124,18 @@ def create_cluster(
 #            Create & Save dataset
 # =============================================
 
-# def create_parquet_nvt_dataset(data_dir, frac_size):
-#   return nvt.Dataset(f'{data_dir}', engine='parquet', part_mem_fraction=frac_size)
 def create_parquet_nvt_dataset(
     # data_path,
     frac_size,
     data_prefix,
-    # bucket,
+    bucket_name,
+    file_pattern,
 ):
     """Create a nvt.Dataset definition for the parquet files."""
     
-    BUCKET = 'gs://spotify-builtin-2t'
-    DATA_PATH = f"{BUCKET}/{data_prefix}/0000000000**.snappy.parquet"
+    # BUCKET = 'gs://spotify-builtin-2t'
+    # DATA_PATH = f"{BUCKET}/{data_prefix}/0000000000**.snappy.parquet"
+    DATA_PATH = f"gs://{bucket_name}/{data_prefix}/{file_pattern}" #0000000000**.snappy.parquet"
     fs = fsspec.filesystem('gs')
     
     file_list = fs.glob(DATA_PATH)
@@ -290,6 +290,7 @@ def create_parquet_dataset_definition(
     frac_size,
     bucket_name,
     data_prefix,
+    file_pattern,
     # sep='\t'
 ):
     from google.cloud import storage
@@ -335,8 +336,11 @@ def create_parquet_dataset_definition(
 #             print('Verify access to the bucket.')
             
     # DATASET_DEFINITION = f"gs://{bucket_name}/{data_prefix}/0000000000**.snappy.parquet" 
-    DATASET_DEFINITION = 'gs://spotify-builtin-2t/train_data_parquet/0000000000**.snappy.parquet' # TODO: use to create subset of train data
+    # DATASET_DEFINITION = 'gs://spotify-builtin-2t/train_data_parquet/0000000000**.snappy.parquet' # TODO: use to create subset of train data
+    DATASET_DEFINITION = f"gs://{bucket_name}/{data_prefix}/{file_pattern}" #0000000000**.snappy.parquet"
+    
     logging.info(f'DATASET_DEFINITION: {DATASET_DEFINITION}')
+    
     return nvt.Dataset(f"{DATASET_DEFINITION}", engine='parquet', part_mem_fraction=frac_size)
     # return nvt.Dataset(
   #       path_or_source=valid_paths, # [50:] # to process subset of paths
@@ -374,6 +378,10 @@ def convert_definition_to_parquet(
 #            Create nv-tabular definition
 # =============================================
 def main_convert(args):
+    
+    logging.info('Beginning main-convert from task.py...')
+    logging.info(f'args.output_path: {args.output_path}')
+    
     logging.info('Creating cluster')
     client = create_cluster(
         args.n_workers,
@@ -388,7 +396,8 @@ def main_convert(args):
         recursive=False,
         bucket_name='spotify-builtin-2t', # TODO: parameterize
         data_prefix='train',
-        frac_size=args.frac_size
+        frac_size=args.frac_size,
+        file_pattern=file_pattern,
     )
 
     logging.info('Converting definition to Parquet')
@@ -401,6 +410,10 @@ def main_convert(args):
 #            Analyse Dataset 
 # =============================================
 def main_analyze(args):
+    
+    logging.info('Beginning main-analyze from task.py...')
+    logging.info(f'args.bucket_name: {args.bucket_name}')
+    
     logging.info('Creating cluster')
     client = create_cluster(
         args.n_workers,
@@ -413,7 +426,9 @@ def main_analyze(args):
     dataset = create_parquet_nvt_dataset(
         # data_dir=args.parquet_data_path,
         frac_size=args.frac_size,
-        data_prefix='train_data_parquet'
+        data_prefix='train_data_parquet',
+        bucket_name=args.bucket_name,
+        file_pattern="0000000000**.snappy.parquet",
     )
   
     logging.info('Creating Workflow')
@@ -431,17 +446,31 @@ def main_analyze(args):
 #            Transform Dataset 
 # =============================================
 def main_transform(args):
+    
+    logging.info('Beginning main-transform from task.py...')
+    logging.info(f'args.bucket_name: {args.bucket_name}')
+    
     client = create_cluster(
         args.n_workers,
         args.device_limit_frac,
         args.device_pool_frac,
-        args.memory_limit
+        args.memory_limit,
     )
 
     # nvt_workflow = create_nvt_workflow()
     nvt_workflow = nvt.Workflow.load(args.workflow_path, client)
 
-    dataset = create_parquet_nvt_dataset(args.parquet_data_path, frac_size=args.frac_size)
+    # dataset = create_parquet_nvt_dataset(
+    #     args.parquet_data_path, 
+    #     frac_size=args.frac_size)
+    
+    dataset = create_parquet_nvt_dataset(
+        # data_dir=args.parquet_data_path,
+        frac_size=args.frac_size,
+        data_prefix='train_data_parquet',
+        bucket_name=args.bucket_name,
+        file_pattern="0000000000**.snappy.parquet",
+    )
 
     logging.info('Transforming Dataset')
     transformed_dataset = nvt_workflow.transform(dataset)
@@ -465,6 +494,11 @@ def parse_args():
   
     parser.add_argument(
         '--task',
+        type=str,
+        required=False
+    )
+    parser.add_argument(
+        '--bucket_name',
         type=str,
         required=False
     )

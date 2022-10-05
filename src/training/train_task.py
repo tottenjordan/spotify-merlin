@@ -38,10 +38,6 @@ import tensorflow as tf
 from tensorflow.python.client import device_lib
 import google.cloud.aiplatform as vertex_ai
 
-# TODO: parameterize
-vertex_ai.init(project='hybrid-vertex', location='us-central1') # TODO: parameterize
-logging.info("vertex_ai initialized...")
-
 SNAPSHOT_DIR = 'snapshots'
 HYPERTUNE_METRIC_NAME = 'AUC'
 
@@ -75,6 +71,9 @@ def save_model(model, model_name, model_dir):
     
 def main(args):
     """Runs a training loop."""
+    
+    vertex_ai.init(project=f'{args.project}', location=f'{args.location}')
+    logging.info("vertex_ai initialized...")
 
     repeat_dataset = False if args.num_epochs > 0 else True
     model_dir, snapshot_dir = set_job_dirs()
@@ -197,7 +196,7 @@ def main(args):
 
         model.compile(
             optimizer="adam", 
-            run_eagerly=False, 
+            # run_eagerly=False, 
             metrics=[mm.RecallAt(1), mm.RecallAt(10), mm.NDCGAt(10)]
         )
 
@@ -442,6 +441,18 @@ def parse_args():
         type=str,
         required=True,
         help='Path for saving model artifacts'
+    )
+    parser.add_argument(
+        '--project',
+        type=str,
+        required=True,
+        help='gcp project'
+    )
+    parser.add_argument(
+        '--location',
+        type=str,
+        required=True,
+        help='gcp location'
     )
     
     return parser.parse_args()

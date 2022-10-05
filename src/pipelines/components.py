@@ -35,6 +35,7 @@ def convert_parquet_op(
     output_dataset: Output[Dataset],
     bucket_name: str,
     data_prefix: str,
+    file_pattern: str,
     output_path_defined_dir: str,
     # data_dir_pattern: str,
     # data_paths: list,
@@ -121,20 +122,21 @@ def convert_parquet_op(
 
     logging.info('Creating cluster')
     create_cluster(
-      n_workers=n_workers,
-      device_limit_frac=device_limit_frac,
-      device_pool_frac=device_pool_frac,
-      memory_limit=memory_limit
+        n_workers=n_workers,
+        device_limit_frac=device_limit_frac,
+        device_pool_frac=device_pool_frac,
+        memory_limit=memory_limit
     )
   
     # logging.info(f'Creating dataset definition from: {data_path_prefix}')
     dataset = create_parquet_dataset_definition(
-      # data_paths=f'{data_dir_pattern}', # data_paths,
-      recursive=recursive,
-      bucket_name=bucket_name,
-      data_prefix=data_prefix,
-      # col_dtypes=get_criteo_col_dtypes(),
-      frac_size=frac_size
+        # data_paths=f'{data_dir_pattern}', # data_paths,
+        recursive=recursive,
+        bucket_name=bucket_name,
+        data_prefix=data_prefix,
+        # col_dtypes=get_criteo_col_dtypes(),
+        frac_size=frac_size,
+        file_pattern=file_pattern,
     )
   
     logging.info(f'Converting Definition to Parquet; {output_dataset.uri}')
@@ -229,6 +231,9 @@ def transform_dataset_op(
     output_path_transformed_dir: str,
     output_path_analyzed_dir: str,
     version: str,
+    bucket_data_src: str,
+    bucket_data_output: str,
+    app: str,
     split: str,
     num_output_files: int,
     n_workers: int,
@@ -318,51 +323,60 @@ def transform_dataset_op(
         output_files=num_output_files,
         shuffle=shuffle
     )
-
+    logging.info(f'transformed_dataset saved!')
+    logging.info(f'transformed_dataset.path: {transformed_dataset.path}')
+    
     # =========================================================
     #        read and upload files
     # =========================================================
+    '''
+    nv-tabular creates a txt file with all `gs://` paths
+    create a copy that replaces `gs://` with `/gcs/`
+    '''
     logging.info('Generating file list for training.')
     
     # get loca directory
-    _local_directory = os.getcwd()
+    LOCAL_DIRECTORY = os.getcwd()
     
-    _bucket_name='spotify-merlin-v1'
-    _prefix=f'nvt-preprocessing-spotify-{version}/nvt-processed/{split}'
-    _filename='_file_list.txt'
-    _source_blob_name = f'{_prefix}/{_filename}'
-    logging.info(f'_source_blob_name: {_source_blob_name}')
+    # _bucket_name='spotify-merlin-v1' # bucket_data_src
+    PREFIX = f'nvt-preprocessing-{app}-{version}/nvt-processed/{split}'
+    FILENAME = '_file_list.txt'
+    SOURCE_BLOB_NAME = f'{PREFIX}/{FILENAME}'
+    logging.info(f'SOURCE_BLOB_NAME: {SOURCE_BLOB_NAME}')
     
-    _local_destination_filename = f'{_local_directory}/local_file_list.txt'
-    logging.info(f'_local_destination_filename: {_local_destination_filename}')
+    LOCAL_DESTINATION_FILENAME = f'{LOCAL_DIRECTORY}/local_file_list.txt'
+    logging.info(f'LOCAL_DESTINATION_FILENAME: {LOCAL_DESTINATION_FILENAME}')
     
     _read_blob_gcs(
-        bucket_name=_bucket_name,
-        source_blob_name=f'{_source_blob_name}', 
-        destination_filename=_local_destination_filename
+        bucket_name=bucket_data_output,
+        source_blob_name=f'{SOURCE_BLOB_NAME}', 
+        destination_filename=LOCAL_DESTINATION_FILENAME
     )
     
     # write new '/gcs/' file
     new_lines = []
-    with open(_local_destination_filename, 'r') as fp:
+    with open(LOCAL_DESTINATION_FILENAME, 'r') as fp:
         lines = fp.readlines()
         new_lines.append(lines[0])
         for line in lines[1:]:
             new_lines.append(line.replace('gs://', '/gcs/'))
 
-    _new_local_filename = f'{_local_directory}/_gcs_file_list.txt'
-    logging.info(f'_new_local_filename: {_new_local_filename}')
+    NEW_LOCAL_FILENAME = f'{LOCAL_DIRECTORY}/_gcs_file_list.txt'
+    logging.info(f'NEW_LOCAL_FILENAME: {NEW_LOCAL_FILENAME}')
     
-    with open(_new_local_filename, 'w') as fp:
+    with open(NEW_LOCAL_FILENAME, 'w') as fp:
         fp.writelines(new_lines)
         
-    _gcs_uri_destination = f'{output_path_transformed_dir}/{split}'
+    GCS_URI_DESTINATION = f'{output_path_transformed_dir}/{split}'
+    logging.info(f'GCS_URI_DESTINATION: {GCS_URI_DESTINATION}')
     
     _upload_blob_gcs(
-        gcs_uri=_gcs_uri_destination, 
-        source_file_name=_new_local_filename, 
+        gcs_uri=GCS_URI_DESTINATION, 
+        source_file_name=NEW_LOCAL_FILENAME, 
         destination_blob_name='_gcs_file_list.txt'
     )
+    
+    logging.info(f'List of /gcs/ file paths uploaded to {GCS_URI_DESTINATION}/_gcs_file_list.txt')
 
 #     logging.info('Generating file list for training.')
 #     logging.info(f'output_path_transformed_dir/split: {output_path_transformed_dir}/{split}')
@@ -394,5 +408,5 @@ def transform_dataset_op(
         cards.append(col.properties['embedding_sizes']['cardinality'])
 
     transformed_dataset.metadata['cardinalities'] = cards
-    transformed_dataset.metadata['dataset_gcs_uri'] = _gcs_uri_destination
+    transformed_dataset.metadata['dataset_gcs_uri'] = GCS_URI_DESTINATION
     
